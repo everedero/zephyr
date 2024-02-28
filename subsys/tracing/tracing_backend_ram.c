@@ -10,6 +10,7 @@
 #include <tracing_core.h>
 #include <tracing_buffer.h>
 #include <tracing_backend.h>
+#define CONFIG_RAM_TRACING_FOREVER
 
 uint8_t ram_tracing[CONFIG_RAM_TRACING_BUFFER_SIZE];
 static uint32_t pos;
@@ -20,6 +21,10 @@ static void tracing_backend_ram_output(
 		uint8_t *data, uint32_t length)
 {
 	if (buffer_full) {
+#ifdef CONFIG_RAM_TRACING_FOREVER
+		pos = 0;
+		buffer_full = false;
+#endif
 		return;
 	}
 
