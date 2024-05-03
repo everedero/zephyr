@@ -13,8 +13,8 @@
 #include <errno.h>
 #include "echo-client.h"
 
-#define SSID "lenovo" //"AnybodyOutThere"
-#define PSK "HelloIsThere?"
+#define SSID "Mugoreve"//"lenovo" //"AnybodyOutThere"
+#define PSK "mugorevecestlepiedsalsifi"//"HelloIsThere?"
 
 static K_SEM_DEFINE(wifi_connected, 0, 1);
 static K_SEM_DEFINE(ipv4_address_obtained, 0, 1);
