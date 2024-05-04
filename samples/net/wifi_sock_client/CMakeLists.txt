@@ -8,6 +8,7 @@ project(esp32_wifi)
 FILE(GLOB app_sources src/*.c)
 target_sources(app PRIVATE ${app_sources})
 target_sources_ifdef(CONFIG_NET_UDP app PRIVATE src/udp.c)
+target_sources(app PRIVATE src/tinyosc/tinyosc.c)
 
 set(gen_dir ${ZEPHYR_BINARY_DIR}/include/generated/)
 

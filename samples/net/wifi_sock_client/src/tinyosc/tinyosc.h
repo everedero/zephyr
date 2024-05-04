@@ -18,7 +18,8 @@
 #define _TINY_OSC_
 
 #include <stdbool.h>
-#include <stdint.h>
+#include <stdio.h>
+#include <strings.h>
 
 #define TINYOSC_TIMETAG_IMMEDIATELY 1L
 

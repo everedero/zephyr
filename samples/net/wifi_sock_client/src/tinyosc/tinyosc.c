@@ -14,13 +14,21 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
+#define ZEPHYR_RTOS 1
+#ifndef ZEPHYR_RTOS
 #include <stddef.h>
 #include <stdarg.h>
 #include <string.h>
 #include <stdio.h>
+#endif
 #if _WIN32
 #include <winsock2.h>
 #define tosc_strncpy(_dst, _src, _len) strncpy_s(_dst, _len, _src, _TRUNCATE)
+#elif ZEPHYR_RTOS
+#include <zephyr/net/net_ip.h>
+#include <zephyr/kernel.h>
+#include <stdarg.h>
+#define tosc_strncpy(_dst, _src, _len) strncpy(_dst, _src, _len)
 #else
 #include <netinet/in.h>
 #define tosc_strncpy(_dst, _src, _len) strncpy(_dst, _src, _len)
