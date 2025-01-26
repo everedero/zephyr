@@ -223,8 +223,17 @@ static void gpio_qdec_event_worker(struct k_work *work)
 	data->acc -= acc * cfg->steps_per_period;
 	irq_unlock(key);
 
-	if (acc != 0) {
-		input_report_rel(data->dev, cfg->axis, acc, true, K_FOREVER);
+	//if (acc != 0) {
+	//	input_report_rel(data->dev, cfg->axis, acc, true, K_FOREVER);
+	//}
+	static bool toggle = true;
+	if (acc > 0) {
+		input_report_key(dev, INPUT_KEY_LEFT, toggle, true, K_FOREVER);
+		toggle = !toggle;
+	}
+	else if (acc < 0) {
+		input_report_key(dev, INPUT_KEY_RIGHT, toggle, true, K_FOREVER);
+		toggle = !toggle;
 	}
 }
 
