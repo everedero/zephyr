@@ -70,21 +70,8 @@
 
 	adc0_default: adc0_default {
 		group1 {
-			pinmux = <PA2X_ADC_AD0>,
-				 <PA3X_ADC_AD1>,
-				 <PA4X_ADC_AD2>,
-				 <PA6X_ADC_AD3>,
-				 <PA22X_ADC_AD4>,
-				 <PA23X_ADC_AD5>,
-				 <PA24X_ADC_AD6>,
-				 <PA16X_ADC_AD7>,
-				 //<PB12X_ADC_AD8>,
-				 //<PB13X_ADC_AD9>,
-				 <PB17X_ADC_AD10>,
-				 <PB18X_ADC_AD11>,
-				 <PB19X_ADC_AD12>;
-				 //<PB20X_ADC_AD13>,
-				 //<PB21X_ADC_AD14>;
+			pinmux = <PA23X_ADC_AD5>,
+				 <PA24X_ADC_AD6>;
 		};
 	};
 };
