@@ -8,6 +8,7 @@
 #include <zephyr/dt-bindings/i2c/i2c.h>
 #include <zephyr/dt-bindings/gpio/gpio.h>
 #include <zephyr/dt-bindings/clock/atmel_sam_pmc.h>
+#include <zephyr/dt-bindings/dma/atmel_sam3x_dma.h>
 
 / {
 	aliases {
@@ -30,6 +31,15 @@
 	};
 
 	soc {
+		dmac: dma0: dma-controller@400c4000 {
+			compatible = "atmel,sam-dmac";
+			reg = <0x400c4000 0x400>;
+			interrupts = <39 0>;
+			clocks = <&pmc PMC_TYPE_PERIPHERAL 39>;
+			#dma-cells = <2>;
+			status = "disabled";
+		};
+
 		pmc: pmc@400e0600 {
 			compatible = "atmel,sam-pmc";
 			reg = <0x400e0600 0x200>;
