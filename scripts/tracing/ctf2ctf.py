@@ -112,7 +112,7 @@ def handle_thread_event(event, timestamp):
     if any(match in event.name for match in ['info', 'create', 'name_set',
         'wakeup', 'priority_set', 'pending']):
         tid = event.payload_field['thread_id']
-        g_events.append(format_json(event.name, timestamp, 'i', 0))
+        g_events.append(format_json(event.name, timestamp, 'i', tid))
         return
 
     if any(match in event.name for match in ['thread_switched_in',
@@ -258,7 +258,39 @@ def handle_buf_event(event, timestamp):
             print(f"Something doesn't add up: {hex(buf)}")
 
         # This will show up on the same thread as the "buf xx in use" event
-        g_events.append(format_json(f"ref", timestamp, ph, tid, None, 1))
+        g_events.append(format_json(f"ref", timestamp, p22:30h, tid, None, 1))
+
+def handle_semaphore_event(event, timestamp):
+    if any(match in event.name for match in ['take_blocking', "take_enter",
+           "give_enter"]):
+        tid = event.payload_field['id']
+        args = {}
+        for key, val in event.payload_field.items():
+            args[key] = int(val)
+        g_events.append(format_json(event.name, timestamp, 'i', tid, args=args))
+        return
+
+    if any(match in event.name for match in ['take_exit']):
+        ph = 'B'
+    elif any(match in event.name for match in ['give_exit', 'reset']):
+        ph = 'E'
+    else:
+        raise Exception(f'THREAD OTHER: {event.name}')
+
+    tid = event.payload_field['id']
+
+    # Is this thread already running?
+    already = add_thread(tid, "Semaphore {:02x}".format(int(event.payload_field['id'])),
+                         ph == 'B')
+
+    if already and ph == 'B':
+        # Means the thread is already switched in/out,
+        # adding another event will confuse the UI
+        # It probably means that we are returning from an ISR
+        print(f'Ignoring sema begin event for TID {hex(tid)}')
+        return
+
+    g_events.append(format_json('taken', timestamp, ph, tid, None))
 
 def handle_isr_event(event, timestamp):
     name = event.name
@@ -289,6 +321,17 @@ def handle_isr_event(event, timestamp):
     tid = 1
 
     g_events.append(format_json('isr_active', timestamp, ph, tid, None))
+
+def handle_named_event(event, timestamp):
+    name = event.name
+
+    args = {}
+    for key, val in event.payload_field.items():
+        if key != "name":
+            args[key] = int(val)
+    g_events.append(format_json(str(event.payload_field["name"]), timestamp,
+                                'i', 7, None,
+                                args=args))
 
 prev_evt_time_us = 0
 def workaround_timing(evt_us):
@@ -325,6 +368,10 @@ def main():
             handle_thread_event(event, timestamp)
             return
 
+        elif 'named_event' in name:
+            handle_named_event(event, timestamp)
+            return
+
         elif 'idle' in name:
             # Means no thread is switched in.
             # Also a valid way of exiting the ISR
@@ -339,7 +386,8 @@ def main():
             tid = 2
 
         elif 'semaphore' in name:
-            tid = 3
+            handle_semaphore_event(event, timestamp)
+            return
 
         elif 'timer' in name:
             tid = 4
@@ -357,9 +405,6 @@ def main():
 
         elif 'socket' in name:
             tid = 6
-
-        elif 'named_event' in name:
-            tid = 7
 
         else:
             raise Exception(f'Unknown event: {event.name} payload {event.payload_field}')
