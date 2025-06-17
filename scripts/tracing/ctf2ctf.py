@@ -46,6 +46,9 @@ def spit_json(path, trace_events):
     trace_events.append(add_metadata("thread_name", 0, 2, {'name': 'Mutex'}))
     trace_events.append(add_metadata("thread_name", 0, 3, {'name': 'Semaphore'}))
     trace_events.append(add_metadata("thread_name", 0, 4, {'name': 'Timer'}))
+    trace_events.append(add_metadata("thread_name", 0, 5, {'name': 'Net'}))
+    trace_events.append(add_metadata("thread_name", 0, 6, {'name': 'Socket'}))
+    trace_events.append(add_metadata("thread_name", 0, 7, {'name': 'Custom'}))
 
     for k in g_buf_names.keys():
         # TODO: group buffers in one PID per pool
@@ -63,19 +66,21 @@ def spit_json(path, trace_events):
     with open(path, "w") as f:
         f.write(content)
 
-def format_json(name, ts, ph, tid=0, meta=None, pid=0):
+def format_json(name, ts, ph, tid=0, meta=None, pid=0, args=None):
     # Chrome trace format
     # `args` has to have at least one arg, is
     # shown when clicking the event
+    if args is None:
+        json_args = {'dummy': 0}
+    else:
+        json_args = args
     evt = {
         'pid': int(pid),
         'tid': int(tid),
         'name': name,
         'ph': ph,
         'ts': ts,
-        'args': {
-            'dummy': 0,
-        },
+        'args': json_args,
     }
 
     if ph == 'X':
@@ -104,14 +109,18 @@ def exit_isr(timestamp):
     g_events.append(format_json('isr_active', timestamp, 'E', 1))
 
 def handle_thread_event(event, timestamp):
-    if any(match in event.name for match in ['info', 'create', 'name_set']):
+    if any(match in event.name for match in ['info', 'create', 'name_set',
+        'wakeup', 'priority_set', 'pending']):
         tid = event.payload_field['thread_id']
         g_events.append(format_json(event.name, timestamp, 'i', 0))
         return
 
-    if 'thread_switched_in' in event.name:
+    if any(match in event.name for match in ['thread_switched_in',
+                                             'thread_resume']):
         ph = 'B'
-    elif 'thread_switched_out' in event.name:
+    elif any(match in event.name for match in ['thread_switched_out',
+                                             'thread_abort',
+                                             'thread_suspend']):
         ph = 'E'
     else:
         raise Exception(f'THREAD OTHER: {event.name}')
@@ -132,6 +141,48 @@ def handle_thread_event(event, timestamp):
         exit_isr(timestamp)
 
     g_events.append(format_json('running', timestamp, ph, tid, None))
+
+def handle_gpio_event(event, timestamp):
+    # One-time event
+    if any(match in event.name for match in ['file_callback']):
+        tid = int(event.payload_field['port'])
+        g_events.append(format_json(event.name, timestamp, 'i', 0))
+        return
+
+    if "_enter" in event.name:
+        ph = 'B'
+    elif "_exit" in event.name:
+        ph = 'E'
+    else:
+        raise Exception(f'THREAD OTHER: {event.name}')
+
+    tid = int(event.payload_field['port'])
+
+    # Is this thread already running?
+    already = add_thread(tid,
+                         "GPIO{:02x}".format(int(event.payload_field['port'])), ph == 'B')
+
+    if already and ph == 'B':
+        # Means the thread is already switched in/out,
+        # adding another event will confuse the UI
+        # It probably means that we are returning from an ISR
+        print(f'Ignoring thread begin event for TID {hex(tid)}')
+        return
+
+    if ph == 'B' and g_isr_active:
+        exit_isr(timestamp)
+
+    status = event.name.replace("gpio_", "")
+    status = status.replace("_enter", "")
+    status = status.replace("_exit", "")
+    args = {}
+    for key, val in event.payload_field.items():
+        if key == "port":
+            args[key] = "0x{:02X}".format(int(val))
+        else:
+            args[key] = int(val)
+    g_events.append(format_json(status, timestamp, ph, tid, None,
+                                args=args))
 
 def handle_buf_lifetime(event, timestamp):
     tid = NET_BUF_TID
@@ -293,9 +344,22 @@ def main():
         elif 'timer' in name:
             tid = 4
 
+        elif 'gpio' in name:
+            handle_gpio_event(event, timestamp)
+            return
+
         elif 'net_buf' in name:
             handle_buf_event(event, timestamp)
             return
+
+        elif 'net' in name:
+            tid = 5
+
+        elif 'socket' in name:
+            tid = 6
+
+        elif 'named_event' in name:
+            tid = 7
 
         else:
             raise Exception(f'Unknown event: {event.name} payload {event.payload_field}')
