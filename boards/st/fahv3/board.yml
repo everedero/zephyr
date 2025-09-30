@@ -1,0 +1,6 @@
+board:
+  name: fahv3
+  full_name: Nucleo F722ZE
+  vendor: st
+  socs:
+    - name: stm32f730xx

@@ -1,0 +1,299 @@
+/*
+ * Copyright (c) 2023 Evan Perry Grove
+ * Copyright (c) 2024 STMicroelectronics
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/dts-v1/;
+#include <st/f7/stm32f730.dtsi>
+#include <st/f7/stm32f730z8tx-pinctrl.dtsi>
+#include "arduino_r3_connector.dtsi"
+#include <zephyr/dt-bindings/input/input-event-codes.h>
+
+/ {
+	model = "FAH V3 STM32F730Z8";
+	compatible = "st,fahv3", "st,stm32f730";
+
+	chosen {
+		zephyr,console = &uart4;
+		zephyr,shell-uart = &uart4;
+		zephyr,sram = &sram0;
+		zephyr,flash = &flash0;
+		zephyr,code-partition = &slot0_partition;
+		zephyr,flash-controller = &at25sf161b;
+		zephyr,display = &ili9341;
+	};
+
+	leds {
+		compatible = "gpio-leds";
+
+		dbg_led: led_1 {
+			gpios = <&gpiod 0 GPIO_ACTIVE_LOW>;
+			label = "Dbg LD1";
+		};
+
+		dbg_led2: led_2 {
+			gpios = <&gpiod 1 GPIO_ACTIVE_LOW>;
+			label = "Dbg LD2";
+		};
+
+		displ_reset: rst_1 {
+			gpios = <&gpioe 10 GPIO_ACTIVE_LOW>;
+			label = "Display nRST";
+		};
+	};
+
+	gpio_keys {
+		compatible = "gpio-keys";
+
+		home_button: button_1 {
+			label = "Home";
+			gpios = <&gpioa 2 GPIO_ACTIVE_LOW>;
+			zephyr,code = <INPUT_KEY_0>;
+		};
+
+		ok_button: button_2 {
+			label = "Ok";
+			gpios = <&gpioc 13 GPIO_ACTIVE_LOW>;
+			zephyr,code = <INPUT_KEY_1>;
+		};
+
+		pause_button: button_3 {
+			label = "Pause";
+			gpios = <&gpioc 1 GPIO_ACTIVE_LOW>;
+			zephyr,code = <INPUT_KEY_2>;
+		};
+	};
+
+	aliases {
+		led0 = &dbg_led;
+		sw0 = &ok_button;
+		watchdog0 = &iwdg;
+		die-temp0 = &die_temp;
+		volt-sensor0 = &vref;
+	};
+
+	mipi_dbi {
+		compatible = "zephyr,mipi-dbi-spi";
+		dc-gpios = <&gpioe 11 GPIO_ACTIVE_LOW>;
+		reset-gpios = <&gpioe 13 GPIO_ACTIVE_LOW>;
+		spi-dev = <&spi4>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		write-only;
+
+		ili9341: ili9341@0 {
+			compatible = "ilitek,ili9341";
+			mipi-max-frequency = <6000000>; /* Max 50 Mbit/s */
+			reg = <0>;
+			pixel-format = <0>;//RGB666
+			rotation = <0>;
+			width = <240>;
+			height = <320>;
+			duplex = <0x800>; //SPI_HALF_DUPLEX;
+			// Init
+			pwctrla = [39 2c 00 34 02];//57 44 0 52 2];
+			pwctrlb = [00 c1 30];//[0 139 48];
+			timctrla = [85 00 78];//[137 17 122];
+			timctrlb = [00 00];
+			pwseqctrl = [64 03 12 81];//[85 1 35 1];
+			pumpratioctrl = [20];//[16];
+			frmctr1 = [00 18];
+			disctrl = [08 82 27 04];
+			vmctrl1 = [3e 28];
+			vmctrl2 = [86];
+			enable3g = [00];
+			gamset = [01];
+			pgamctrl = [0f 31 2b 0c 0e 08 4e f1 37 07 10 03 0e 09 00];
+			ngamctrl = [00 0e 14 03 11 07 31 c1 48 08 0f 0c 31 36 0f];
+		};
+	};
+};
+
+&clk_hse {
+	clock-frequency = <DT_FREQ_M(25)>;
+	status = "okay";
+};
+
+&clk_hsi {
+	status = "disabled";
+};
+
+&clk_lsi {
+	status = "okay";
+};
+
+&pll {
+	div-m = <25>;
+	mul-n = <432>;
+	div-p = <2>;
+	div-q = <9>;
+	clocks = <&clk_hse>;
+	status = "okay";
+};
+
+&rcc {
+	clocks = <&pll>;
+	clock-frequency = <DT_FREQ_M(216)>;
+	ahb-prescaler = <1>;
+	apb1-prescaler = <4>;
+	apb2-prescaler = <2>;
+};
+
+sdcard: &sdmmc2 {
+	status = "okay";
+	pinctrl-0 = <&sdmmc2_d0_pg9 &sdmmc2_d1_pg10
+            &sdmmc2_d2_pg11 &sdmmc2_d3_pg12
+            &sdmmc2_ck_pd6 &sdmmc2_cmd_pd7>;
+	pinctrl-names = "default";
+        bus-width = <1>; //default 1
+	//cd-gpios = <&gpioi 15 GPIO_ACTIVE_LOW>;
+	disk-name = "SD";
+};
+
+&adc1 {
+	pinctrl-0 = <&adc1_in9_pb1>;
+	pinctrl-names = "default";
+	st,adc-clock-source = "SYNC";
+	st,adc-prescaler = <2>;
+	status = "okay";
+};
+
+&dac1 {
+	pinctrl-0 = <&dac_out1_pa4>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
+&uart4 {
+	pinctrl-0 = <&uart4_tx_pa0 &uart4_rx_pa1>;
+	pinctrl-names = "default";
+	current-speed = <115200>;
+	status = "okay";
+};
+
+&uart8 {
+	pinctrl-0 = <&uart8_tx_pe1 &uart8_rx_pe0>;
+	pinctrl-names = "default";
+	current-speed = <115200>;
+	status = "okay";
+};
+
+&i2c1 {
+	pinctrl-0 = <&i2c1_scl_pb8 &i2c1_sda_pb7>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
+&spi4 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	pinctrl-0 = <&spi4_sck_pe12 &spi4_mosi_pe14>;
+	cs-gpios = <&gpioe 15 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
+&quadspi {
+	pinctrl-names = "default";
+	pinctrl-0 = <&quadspi_clk_pb2 &quadspi_bk1_ncs_pb6
+		&quadspi_bk1_io0_pf8 &quadspi_bk1_io1_pf9
+		&quadspi_bk1_io2_pe2 &quadspi_bk1_io3_pf6>;
+	flash-id = <1>;
+	status = "okay";
+
+	at25sf161b: qspi-nor-flash@0 {
+		compatible = "st,stm32-qspi-nor";
+		reg = <0>;
+		qspi-max-frequency = <8000000>;
+		size = <DT_SIZE_M(16)>; /* 2 MBytes */
+		status = "okay";
+		spi-bus-width = <4>;
+		writeoc = "PP_1_1_4";
+                jedec-id = [1f 86 01];
+	};
+};
+
+&timers1 {
+	st,prescaler = <10000>;
+	status = "okay";
+
+	pwm_screen: pwm {
+		status = "okay";
+		pinctrl-0 = <&tim1_ch1_pe9>;
+		pinctrl-names = "default";
+	};
+};
+
+zephyr_udc0: &usbotg_fs {
+	pinctrl-0 = <&usb_otg_hs_dm_pb14 &usb_otg_hs_dp_pb15>;
+	pinctrl-names = "default";
+	status = "okay";
+};
+
+&rtc {
+	clocks = <&rcc STM32_CLOCK(APB1, 28)>,
+		 <&rcc STM32_SRC_LSI RTC_SEL(2)>;
+	status = "okay";
+};
+
+&die_temp {
+	status = "okay";
+};
+
+&iwdg {
+	status = "okay";
+};
+
+&vref {
+	status = "okay";
+};
+
+&quadspi {
+	pinctrl-names = "default";
+	pinctrl-0 = <&quadspi_clk_pb2 &quadspi_bk1_ncs_pb6
+		     &quadspi_bk1_io0_pd11 &quadspi_bk1_io1_pd12
+		     &quadspi_bk1_io2_pe2 &quadspi_bk1_io3_pd13>;
+	flash-id = <1>;
+	status = "okay";
+};
+
+&flash0 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		/* sectors 0-3 */
+		boot_partition: partition@0 {
+			label = "mcuboot";
+			reg = <0x00000000 DT_SIZE_K(64)>;
+			read-only;
+		};
+
+		/* sector 4 */
+		storage_partition: partition@10000 {
+			label = "storage";
+			reg = <0x00010000 DT_SIZE_K(64)>;
+		};
+
+		/* sector 5 */
+		slot0_partition: partition@20000 {
+			label = "image-0";
+			reg = <0x00020000 DT_SIZE_K(128)>;
+		};
+
+		/* sector 6 */
+		slot1_partition: partition@40000 {
+			label = "image-1";
+			reg = <0x00040000 DT_SIZE_K(128)>;
+		};
+
+		/* sector 7 */
+		scratch_partition: partition@60000 {
+			label = "image-scratch";
+			reg = <0x00060000 DT_SIZE_K(128)>;
+		};
+	};
+};
