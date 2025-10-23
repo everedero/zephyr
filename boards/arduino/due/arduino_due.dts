@@ -73,6 +73,10 @@
 	pinctrl-names = "default";
 };
 
+zephyr_udc0: &usbhs {
+        status = "okay";
+};
+
 &pwm0 {
 	status = "okay";
 

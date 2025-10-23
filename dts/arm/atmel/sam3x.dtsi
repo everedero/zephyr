@@ -166,6 +166,17 @@
 			status = "disabled";
 		};
 
+		usbhs: usbd@40038000 {
+			compatible = "atmel,sam-usbhs";
+			reg = <0x400ac000 0x4000>;
+			interrupts = <40 0>;
+			interrupt-names = "usbhs";
+			maximum-speed = "high-speed";
+			num-bidir-endpoints = <10>;
+			clocks = <&pmc PMC_TYPE_PERIPHERAL 40>;
+			status = "disabled";
+		};
+
 		pinctrl: pinctrl@400e0e00 {
 			compatible = "atmel,sam-pinctrl";
 			#address-cells = <1>;
