@@ -7,7 +7,7 @@
 config QSPI_SAM
 	bool "Atmel SAM series QSPI driver"
 	default y
-	depends on DT_HAS_ATMEL_SAM_QSPI_ENABLED
+	#depends on DT_HAS_ATMEL_SAM_QSPI_ENABLED
 	select PINCTRL
 	select GPIO
 	help
