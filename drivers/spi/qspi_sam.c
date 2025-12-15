@@ -119,9 +119,9 @@ static int qspi_sam_configure(const struct device *dev,
 	regs->QSPI_SCR = spi_csr;
 	/* Set instruction length to quad */
 	//regs->QSPI_IFR = QSPI_INSTRFRAME_WIDTH_QUAD_CMD;
-	mask = regs->QSPI_IFR;
-	mask |= QSPI_IFR_WIDTH(4);
-	regs->QSPI_IFR = mask;
+//	mask = regs->QSPI_IFR;
+//	mask |= QSPI_IFR_WIDTH(4);
+//	regs->QSPI_IFR = mask;
 
 	regs->QSPI_CR = QSPI_CR_QSPIEN; /* Enable SPI */
 
