@@ -127,10 +127,10 @@ static int qspi_sam_configure(const struct device *dev,
 /* Finish any ongoing writes and drop any remaining read data */
 static void qspi_sam_finish(Qspi *regs)
 {
-	while ((regs->QSPI_SR & SPI_SR_TXEMPTY) == 0) {
+	while ((regs->QSPI_SR & QSPI_SR_TXEMPTY) == 0) {
 	}
 
-	while (regs->QSPI_SR & SPI_SR_RDRF) {
+	while (regs->QSPI_SR & QSPI_SR_RDRF) {
 		(void)regs->QSPI_RDR;
 	}
 }
@@ -145,10 +145,10 @@ static void qspi_sam_fast_tx(Qspi *regs, const uint8_t *tx_buf, const uint32_t t
 	while (p != pend) {
 		ch = *p++;
 
-		while ((regs->QSPI_SR & SPI_SR_TDRE) == 0) {
+		while ((regs->QSPI_SR & QSPI_SR_TDRE) == 0) {
 		}
 
-		regs->QSPI_TDR = SPI_TDR_TD(ch);
+		regs->QSPI_TDR = QSPI_TDR_TD(ch);
 	}
 }
 
@@ -163,27 +163,27 @@ static void qspi_sam_fast_rx(Qspi *regs, uint8_t *rx_buf, const uint32_t rx_buf_
 	}
 
 	/* Write the first byte */
-	regs->QSPI_TDR = SPI_TDR_TD(0);
+	regs->QSPI_TDR = QSPI_TDR_TD(0);
 	len--;
 
 	while (len) {
-		while ((regs->QSPI_SR & SPI_SR_TDRE) == 0) {
+		while ((regs->QSPI_SR & QSPI_SR_TDRE) == 0) {
 		}
 
 		/* Read byte N+0 from the receive register */
-		while ((regs->QSPI_SR & SPI_SR_RDRF) == 0) {
+		while ((regs->QSPI_SR & QSPI_SR_RDRF) == 0) {
 		}
 
 		*rx = (uint8_t)regs->QSPI_RDR;
 		rx++;
 
 		/* Load byte N+1 into the transmit register */
-		regs->QSPI_TDR = SPI_TDR_TD(0);
+		regs->QSPI_TDR = QSPI_TDR_TD(0);
 		len--;
 	}
 
 	/* Read the final incoming byte */
-	while ((regs->QSPI_SR & SPI_SR_RDRF) == 0) {
+	while ((regs->QSPI_SR & QSPI_SR_RDRF) == 0) {
 	}
 
 	*rx = (uint8_t)regs->QSPI_RDR;
@@ -216,27 +216,27 @@ static void qspi_sam_fast_txrx(Qspi *regs,
 	 */
 
 	/* Write the first byte */
-	regs->QSPI_TDR = SPI_TDR_TD(*tx++);
+	regs->QSPI_TDR = QSPI_TDR_TD(*tx++);
 
 	while (tx != txend) {
-		while ((regs->QSPI_SR & SPI_SR_TDRE) == 0) {
+		while ((regs->QSPI_SR & QSPI_SR_TDRE) == 0) {
 		}
 
 		/* Load byte N+1 into the transmit register.  TX is
 		 * single buffered and we have at most one byte in
 		 * flight so skip the DRE check.
 		 */
-		regs->QSPI_TDR = SPI_TDR_TD(*tx++);
+		regs->QSPI_TDR = QSPI_TDR_TD(*tx++);
 
 		/* Read byte N+0 from the receive register */
-		while ((regs->QSPI_SR & SPI_SR_RDRF) == 0) {
+		while ((regs->QSPI_SR & QSPI_SR_RDRF) == 0) {
 		}
 
 		*rx++ = (uint8_t)regs->QSPI_RDR;
 	}
 
 	/* Read the final incoming byte */
-	while ((regs->QSPI_SR & SPI_SR_RDRF) == 0) {
+	while ((regs->QSPI_SR & QSPI_SR_RDRF) == 0) {
 	}
 
 	*rx = (uint8_t)regs->QSPI_RDR;
@@ -358,13 +358,13 @@ static void qspi_sam_shift_master(Qspi *regs, struct qspi_sam_data *data)
 		tx = 0U;
 	}
 
-	while ((regs->QSPI_SR & SPI_SR_TDRE) == 0) {
+	while ((regs->QSPI_SR & QSPI_SR_TDRE) == 0) {
 	}
 
-	regs->QSPI_TDR = SPI_TDR_TD(tx);
+	regs->QSPI_TDR = QSPI_TDR_TD(tx);
 	spi_context_update_tx(&data->ctx, 1, 1);
 
-	while ((regs->QSPI_SR & SPI_SR_RDRF) == 0) {
+	while ((regs->QSPI_SR & QSPI_SR_RDRF) == 0) {
 	}
 
 	rx = (uint8_t)regs->QSPI_RDR;
@@ -479,7 +479,7 @@ static int qspi_sam_init(const struct device *dev)
 	const struct qspi_sam_config *cfg = dev->config;
 	struct qspi_sam_data *data = dev->data;
 
-	/* Enable SPI clock in PMC */
+	/* Enable QSPI clock in PMC */
 	(void)clock_control_on(SAM_DT_PMC_CONTROLLER,
 			       (clock_control_subsys_t)&cfg->clock_cfg);
 
