@@ -1,0 +1,20 @@
+# Copyright (c) 2018, qianfan Zhao
+# SPDX-License-Identifier: Apache-2.0
+
+description: Atmel SAM QSPI controller
+
+compatible: "atmel,sam-qspi"
+
+include:
+  - name: spi-controller.yaml
+  - name: pinctrl-device.yaml
+
+properties:
+  reg:
+    required: true
+
+  interrupts:
+    required: true
+
+  clocks:
+    required: true

@@ -36,7 +36,6 @@ struct qspi_sam_config {
 	Spi *regs;
 	const struct atmel_sam_pmc_config clock_cfg;
 	const struct pinctrl_dev_config *pcfg;
-	bool loopback;
 };
 
 /* Device run time data */
@@ -110,10 +109,6 @@ static int qspi_sam_configure(const struct device *dev,
 	 */
 	spi_mr |= (SPI_MR_MSTR | SPI_MR_MODFDIS);
 	spi_mr |= SPI_MR_PCS(spi_slave_to_mr_pcs(spi_csr_idx));
-
-	if (cfg->loopback) {
-		spi_mr |= SPI_MR_LLB;
-	}
 
 	if ((config->operation & SPI_MODE_CPOL) != 0U) {
 		spi_csr |= SPI_CSR_CPOL;
@@ -524,35 +519,23 @@ static int qspi_sam_init(const struct device *dev)
 
 static DEVICE_API(spi, qspi_sam_driver_api) = {
 	.transceive = qspi_sam_transceive_sync,
-	.release = qspi_sam_release,
+	.release = qspi_sam_release
 };
 
-//#define SPI_SAM_USE_DMA(n) 0
+PINCTRL_DT_INST_DEFINE(0);
 
-//#define SPI_DMA_INIT(n) 0
+static const struct qspi_sam_config qspi0_config = {
+	.regs = (Spi *)DT_INST_REG_ADDR(0),
+	.clock_cfg = SAM_DT_INST_CLOCK_PMC_CFG(0),
+	.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(0)
+};
 
-#define QSPI_SAM_DEFINE_CONFIG(n)								\
-	static const struct qspi_sam_config qspi_sam_config_##n = {				\
-		.regs = (Spi *)DT_INST_REG_ADDR(n),						\
-		.clock_cfg = SAM_DT_INST_CLOCK_PMC_CFG(n),					\
-		.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(n),					\
-		.loopback = DT_INST_PROP(n, loopback),						\
-		0 \
-	}
+static struct qspi_sam_data qspi0_data = {
+		SPI_CONTEXT_INIT_LOCK(qspi0_data, ctx),
+		SPI_CONTEXT_INIT_SYNC(qspi0_data, ctx),
+		SPI_CONTEXT_CS_GPIOS_INITIALIZE(DT_DRV_INST(0), ctx)
+};
 
-//COND_CODE_1(SPI_SAM_USE_DMA(n), (SPI_DMA_INIT(n)), ())				\
-
-#define QSPI_SAM_DEVICE_INIT(n)									\
-	PINCTRL_DT_INST_DEFINE(n);								\
-	QSPI_SAM_DEFINE_CONFIG(n);								\
-	static struct qspi_sam_data qspi_sam_dev_data_##n = {					\
-		SPI_CONTEXT_INIT_LOCK(qspi_sam_dev_data_##n, ctx),				\
-		SPI_CONTEXT_INIT_SYNC(qspi_sam_dev_data_##n, ctx),				\
-		SPI_CONTEXT_CS_GPIOS_INITIALIZE(DT_DRV_INST(n), ctx)				\
-	};											\
-	QSPI_DEVICE_DT_INST_DEFINE(n, &qspi_sam_init, NULL,					\
-			    &qspi_sam_dev_data_##n,						\
-			    &qspi_sam_config_##n, POST_KERNEL,					\
-			    CONFIG_SPI_INIT_PRIORITY, &qspi_sam_driver_api);
-
-DT_INST_FOREACH_STATUS_OKAY(QSPI_SAM_DEVICE_INIT)
+DEVICE_DT_INST_DEFINE(0, &qspi_sam_init, NULL,
+		    &qspi0_data, &qspi0_config, POST_KERNEL,
+		    CONFIG_SPI_INIT_PRIORITY, &qspi_sam_driver_api);
