@@ -27,7 +27,7 @@ LOG_MODULE_REGISTER(qspi_sam);
 
 /* Device constant configuration parameters */
 struct qspi_sam_config {
-	Spi *regs;
+	Qspi *regs;
 	const struct atmel_sam_pmc_config clock_cfg;
 	const struct pinctrl_dev_config *pcfg;
 };
@@ -52,30 +52,14 @@ static inline void spi_spin_unlock(const struct device *dev, k_spinlock_key_t ke
 	k_spin_unlock(&data->lock, key);
 }
 
-static int spi_slave_to_mr_pcs(int slave)
-{
-	int pcs[SAM_QSPI_CHIP_SELECT_COUNT] = {0x0, 0x1, 0x3, 0x7};
-
-	/* SPI worked in fixed peripheral mode(SPI_MR.PS = 0) and disabled chip
-	 * select decode(SPI_MR.PCSDEC = 0), based on Atmel | SMART ARM-based
-	 * Flash MCU DATASHEET 40.8.2 SPI Mode Register:
-	 * PCS = xxx0    NPCS[3:0] = 1110
-	 * PCS = xx01    NPCS[3:0] = 1101
-	 * PCS = x011    NPCS[3:0] = 1011
-	 * PCS = 0111    NPCS[3:0] = 0111
-	 */
-
-	return pcs[slave];
-}
-
 static int qspi_sam_configure(const struct device *dev,
 			     const struct spi_config *config)
 {
 	const struct qspi_sam_config *cfg = dev->config;
 	struct qspi_sam_data *data = dev->data;
-	Spi *regs = cfg->regs;
+	Qspi *regs = cfg->regs;
 	uint32_t spi_mr = 0U, spi_csr = 0U;
-	uint16_t spi_csr_idx = spi_cs_is_gpio(config) ? 0 : config->slave;
+	uint32_t mask;
 	int div;
 
 	if (spi_context_configured(&data->ctx, config)) {
@@ -101,32 +85,39 @@ static int qspi_sam_configure(const struct device *dev,
 	/* Set master mode, disable mode fault detection, set fixed peripheral
 	 * select mode.
 	 */
-	spi_mr |= (SPI_MR_MSTR | SPI_MR_MODFDIS);
-	spi_mr |= SPI_MR_PCS(spi_slave_to_mr_pcs(spi_csr_idx));
+	/* Set SPI mode */
+	spi_mr &= (~QSPI_MR_SMM_SPI);
+	/* Disable local loopback */
+	spi_mr &= (~QSPI_MR_LLB);
+	/* Disable wait data read before transfer */
+	spi_mr &= (~QSPI_MR_WDRBT);
+	/* Set Chip Select Mode */
+	/* Default: not reloaded */
 
 	if ((config->operation & SPI_MODE_CPOL) != 0U) {
-		spi_csr |= SPI_CSR_CPOL;
+		spi_csr |= QSPI_SCR_CPOL;
 	}
 
-	if ((config->operation & SPI_MODE_CPHA) == 0U) {
-		spi_csr |= SPI_CSR_NCPHA;
+	if ((config->operation & SPI_MODE_CPHA) != 0U) {
+		spi_csr |= QSPI_SCR_CPHA;
 	}
 
 	if (SPI_WORD_SIZE_GET(config->operation) != 8) {
 		return -ENOTSUP;
 	} else {
-		spi_csr |= SPI_CSR_BITS(SPI_CSR_BITS_8_BIT);
+		mask = regs->QSPI_MR & (~QSPI_MR_NBBITS_Msk);
+		regs->QSPI_MR = mask | 8;
 	}
 
 	/* Use the requested or next highest possible frequency */
 	div = SOC_ATMEL_SAM_MCK_FREQ_HZ / config->frequency;
 	div = CLAMP(div, 1, UINT8_MAX);
-	spi_csr |= SPI_CSR_SCBR(div);
+	spi_csr |= QSPI_SCR_SCBR(div);
 
-	regs->SPI_CR = SPI_CR_SPIDIS; /* Disable SPI */
-	regs->SPI_MR = spi_mr;
-	regs->SPI_CSR[spi_csr_idx] = spi_csr;
-	regs->SPI_CR = SPI_CR_SPIEN; /* Enable SPI */
+	regs->QSPI_CR = QSPI_CR_QSPIDIS; /* Disable SPI */
+	regs->QSPI_MR = spi_mr;
+	regs->QSPI_SCR = spi_csr;
+	regs->QSPI_CR = QSPI_CR_QSPIEN; /* Enable SPI */
 
 	data->ctx.config = config;
 
@@ -134,18 +125,18 @@ static int qspi_sam_configure(const struct device *dev,
 }
 
 /* Finish any ongoing writes and drop any remaining read data */
-static void qspi_sam_finish(Spi *regs)
+static void qspi_sam_finish(Qspi *regs)
 {
-	while ((regs->SPI_SR & SPI_SR_TXEMPTY) == 0) {
+	while ((regs->QSPI_SR & SPI_SR_TXEMPTY) == 0) {
 	}
 
-	while (regs->SPI_SR & SPI_SR_RDRF) {
-		(void)regs->SPI_RDR;
+	while (regs->QSPI_SR & SPI_SR_RDRF) {
+		(void)regs->QSPI_RDR;
 	}
 }
 
 /* Fast path that transmits a buf */
-static void qspi_sam_fast_tx(Spi *regs, const uint8_t *tx_buf, const uint32_t tx_buf_len)
+static void qspi_sam_fast_tx(Qspi *regs, const uint8_t *tx_buf, const uint32_t tx_buf_len)
 {
 	const uint8_t *p = tx_buf;
 	const uint8_t *pend = (uint8_t *)tx_buf + tx_buf_len;
@@ -154,15 +145,15 @@ static void qspi_sam_fast_tx(Spi *regs, const uint8_t *tx_buf, const uint32_t tx
 	while (p != pend) {
 		ch = *p++;
 
-		while ((regs->SPI_SR & SPI_SR_TDRE) == 0) {
+		while ((regs->QSPI_SR & SPI_SR_TDRE) == 0) {
 		}
 
-		regs->SPI_TDR = SPI_TDR_TD(ch);
+		regs->QSPI_TDR = SPI_TDR_TD(ch);
 	}
 }
 
 /* Fast path that reads into a buf */
-static void qspi_sam_fast_rx(Spi *regs, uint8_t *rx_buf, const uint32_t rx_buf_len)
+static void qspi_sam_fast_rx(Qspi *regs, uint8_t *rx_buf, const uint32_t rx_buf_len)
 {
 	uint8_t *rx = rx_buf;
 	int len = rx_buf_len;
@@ -172,34 +163,34 @@ static void qspi_sam_fast_rx(Spi *regs, uint8_t *rx_buf, const uint32_t rx_buf_l
 	}
 
 	/* Write the first byte */
-	regs->SPI_TDR = SPI_TDR_TD(0);
+	regs->QSPI_TDR = SPI_TDR_TD(0);
 	len--;
 
 	while (len) {
-		while ((regs->SPI_SR & SPI_SR_TDRE) == 0) {
+		while ((regs->QSPI_SR & SPI_SR_TDRE) == 0) {
 		}
 
 		/* Read byte N+0 from the receive register */
-		while ((regs->SPI_SR & SPI_SR_RDRF) == 0) {
+		while ((regs->QSPI_SR & SPI_SR_RDRF) == 0) {
 		}
 
-		*rx = (uint8_t)regs->SPI_RDR;
+		*rx = (uint8_t)regs->QSPI_RDR;
 		rx++;
 
 		/* Load byte N+1 into the transmit register */
-		regs->SPI_TDR = SPI_TDR_TD(0);
+		regs->QSPI_TDR = SPI_TDR_TD(0);
 		len--;
 	}
 
 	/* Read the final incoming byte */
-	while ((regs->SPI_SR & SPI_SR_RDRF) == 0) {
+	while ((regs->QSPI_SR & SPI_SR_RDRF) == 0) {
 	}
 
-	*rx = (uint8_t)regs->SPI_RDR;
+	*rx = (uint8_t)regs->QSPI_RDR;
 }
 
 /* Fast path that writes and reads bufs of the same length */
-static void qspi_sam_fast_txrx(Spi *regs,
+static void qspi_sam_fast_txrx(Qspi *regs,
 			      const uint8_t *tx_buf,
 			      const uint8_t *rx_buf,
 			      const uint32_t len)
@@ -225,36 +216,36 @@ static void qspi_sam_fast_txrx(Spi *regs,
 	 */
 
 	/* Write the first byte */
-	regs->SPI_TDR = SPI_TDR_TD(*tx++);
+	regs->QSPI_TDR = SPI_TDR_TD(*tx++);
 
 	while (tx != txend) {
-		while ((regs->SPI_SR & SPI_SR_TDRE) == 0) {
+		while ((regs->QSPI_SR & SPI_SR_TDRE) == 0) {
 		}
 
 		/* Load byte N+1 into the transmit register.  TX is
 		 * single buffered and we have at most one byte in
 		 * flight so skip the DRE check.
 		 */
-		regs->SPI_TDR = SPI_TDR_TD(*tx++);
+		regs->QSPI_TDR = SPI_TDR_TD(*tx++);
 
 		/* Read byte N+0 from the receive register */
-		while ((regs->SPI_SR & SPI_SR_RDRF) == 0) {
+		while ((regs->QSPI_SR & SPI_SR_RDRF) == 0) {
 		}
 
-		*rx++ = (uint8_t)regs->SPI_RDR;
+		*rx++ = (uint8_t)regs->QSPI_RDR;
 	}
 
 	/* Read the final incoming byte */
-	while ((regs->SPI_SR & SPI_SR_RDRF) == 0) {
+	while ((regs->QSPI_SR & SPI_SR_RDRF) == 0) {
 	}
 
-	*rx = (uint8_t)regs->SPI_RDR;
+	*rx = (uint8_t)regs->QSPI_RDR;
 
 }
 
 
 static inline int qspi_sam_rx(const struct device *dev,
-			      Spi *regs,
+			      Qspi *regs,
 			      uint8_t *rx_buf,
 			      uint32_t rx_buf_len)
 {
@@ -269,7 +260,7 @@ static inline int qspi_sam_rx(const struct device *dev,
 }
 
 static inline int qspi_sam_tx(const struct device *dev,
-			     Spi *regs,
+			     Qspi *regs,
 			     const uint8_t *tx_buf,
 			     uint32_t tx_buf_len)
 {
@@ -284,7 +275,7 @@ static inline int qspi_sam_tx(const struct device *dev,
 
 
 static inline int qspi_sam_txrx(const struct device *dev,
-				Spi *regs,
+				Qspi *regs,
 				const uint8_t *tx_buf,
 				const uint8_t *rx_buf,
 				uint32_t buf_len)
@@ -309,7 +300,7 @@ static void qspi_sam_fast_transceive(const struct device *dev,
 	const struct qspi_sam_config *cfg = dev->config;
 	size_t tx_count = 0;
 	size_t rx_count = 0;
-	Spi *regs = cfg->regs;
+	Qspi *regs = cfg->regs;
 	const struct spi_buf *tx = NULL;
 	const struct spi_buf *rx = NULL;
 
@@ -356,7 +347,7 @@ static bool qspi_sam_transfer_ongoing(struct qspi_sam_data *data)
 	return spi_context_tx_on(&data->ctx) || spi_context_rx_on(&data->ctx);
 }
 
-static void qspi_sam_shift_master(Spi *regs, struct qspi_sam_data *data)
+static void qspi_sam_shift_master(Qspi *regs, struct qspi_sam_data *data)
 {
 	uint8_t tx;
 	uint8_t rx;
@@ -367,16 +358,16 @@ static void qspi_sam_shift_master(Spi *regs, struct qspi_sam_data *data)
 		tx = 0U;
 	}
 
-	while ((regs->SPI_SR & SPI_SR_TDRE) == 0) {
+	while ((regs->QSPI_SR & SPI_SR_TDRE) == 0) {
 	}
 
-	regs->SPI_TDR = SPI_TDR_TD(tx);
+	regs->QSPI_TDR = SPI_TDR_TD(tx);
 	spi_context_update_tx(&data->ctx, 1, 1);
 
-	while ((regs->SPI_SR & SPI_SR_RDRF) == 0) {
+	while ((regs->QSPI_SR & SPI_SR_RDRF) == 0) {
 	}
 
-	rx = (uint8_t)regs->SPI_RDR;
+	rx = (uint8_t)regs->QSPI_RDR;
 
 	if (spi_context_rx_buf_on(&data->ctx)) {
 		*data->ctx.rx_buf = rx;
@@ -519,7 +510,7 @@ static DEVICE_API(spi, qspi_sam_driver_api) = {
 PINCTRL_DT_INST_DEFINE(0);
 
 static const struct qspi_sam_config qspi0_config = {
-	.regs = (Spi *)DT_INST_REG_ADDR(0),
+	.regs = (Qspi *)DT_INST_REG_ADDR(0),
 	.clock_cfg = SAM_DT_INST_CLOCK_PMC_CFG(0),
 	.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(0)
 };
