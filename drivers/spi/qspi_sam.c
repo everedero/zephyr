@@ -30,6 +30,7 @@ struct qspi_sam_config {
 	Qspi *regs;
 	const struct atmel_sam_pmc_config clock_cfg;
 	const struct pinctrl_dev_config *pcfg;
+	const uint8_t width;
 };
 
 /* Device run time data */
@@ -118,10 +119,12 @@ static int qspi_sam_configure(const struct device *dev,
 	regs->QSPI_MR = spi_mr;
 	regs->QSPI_SCR = spi_csr;
 	/* Set instruction length to quad */
-	//regs->QSPI_IFR = QSPI_INSTRFRAME_WIDTH_QUAD_CMD;
-//	mask = regs->QSPI_IFR;
-//	mask |= QSPI_IFR_WIDTH(4);
-//	regs->QSPI_IFR = mask;
+	regs->QSPI_IFR = QSPI_IFR_WIDTH_QUAD_CMD;
+	mask = regs->QSPI_IFR;
+	mask |= QSPI_IFR_WIDTH(cfg->width);
+	printf("width: %d, ", QSPI_IFR_WIDTH(cfg->width));
+	printf("reg: %d\n", QSPI_IFR_WIDTH_QUAD_CMD);
+	regs->QSPI_IFR = mask;
 
 	regs->QSPI_CR = QSPI_CR_QSPIEN; /* Enable SPI */
 
@@ -518,7 +521,8 @@ PINCTRL_DT_INST_DEFINE(0);
 static const struct qspi_sam_config qspi0_config = {
 	.regs = (Qspi *)DT_INST_REG_ADDR(0),
 	.clock_cfg = SAM_DT_INST_CLOCK_PMC_CFG(0),
-	.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(0)
+	.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(0),
+	.width = DT_INST_PROP(0, lines)
 };
 
 static struct qspi_sam_data qspi0_data = {

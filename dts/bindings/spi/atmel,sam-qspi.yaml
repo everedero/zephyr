@@ -18,3 +18,16 @@ properties:
 
   clocks:
     required: true
+
+  lines:
+    type: int
+    default: 1
+    description: |
+      QSPI data lines 1, 2, or 4. 1 data line is full-duplex
+      MOSI and MISO or half-duplex on MOSI only. Lines set to 2
+      or 4 indicate dual or quad I/O modes.
+      Defaults to 1 for full duplex driver's support for full-duplex spi.
+    enum:
+      - 1
+      - 2
+      - 4
