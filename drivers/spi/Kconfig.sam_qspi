@@ -12,4 +12,3 @@ config QSPI_SAM
 	select GPIO
 	help
 	  Enable support for the SAM SPI driver.
-endif # QSPI_SAM
