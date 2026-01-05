@@ -437,6 +437,7 @@ static int qspi_sam_transceive(const struct device *dev,
 	struct qspi_sam_data *data = dev->data;
 	int err = 0;
 
+	spi_context_cs_control(&data->ctx, true);
 	spi_context_lock(&data->ctx, false, NULL, NULL, config);
 
 	const struct qspi_sam_config *cfg = dev->config;
@@ -446,7 +447,6 @@ static int qspi_sam_transceive(const struct device *dev,
 		goto done;
 	}
 
-	spi_context_cs_control(&data->ctx, true);
 
 	if (qspi_sam_is_regular(tx_bufs, rx_bufs)) {
 		qspi_sam_fast_transceive(dev, config, tx_bufs, rx_bufs);
