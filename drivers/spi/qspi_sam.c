@@ -8,7 +8,7 @@
 
 #define DT_DRV_COMPAT atmel_sam_qspi
 
-#define LOG_LEVEL CONFIG_QSPI_LOG_LEVEL
+#define LOG_LEVEL CONFIG_SPI_LOG_LEVEL
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(qspi_sam);
 
@@ -122,8 +122,8 @@ static int qspi_sam_configure(const struct device *dev,
 	regs->QSPI_IFR = QSPI_IFR_WIDTH_QUAD_CMD;
 	mask = regs->QSPI_IFR;
 	mask |= QSPI_IFR_WIDTH(cfg->width);
-	printf("width: %d, ", QSPI_IFR_WIDTH(cfg->width));
-	printf("reg: %d\n", QSPI_IFR_WIDTH_QUAD_CMD);
+	LOG_DBG("width: %d, ", QSPI_IFR_WIDTH(cfg->width));
+	LOG_DBG("reg: %d\n", QSPI_IFR_WIDTH_QUAD_CMD);
 	regs->QSPI_IFR = mask;
 
 	regs->QSPI_CR = QSPI_CR_QSPIEN; /* Enable SPI */
