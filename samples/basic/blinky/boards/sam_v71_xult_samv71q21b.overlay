@@ -1,0 +1,13 @@
+/ {
+	chosen {
+		zephyr,console = &uart3;
+		zephyr,shell-uart = &usart1;
+	};
+};
+
+&qspi {
+	cs-gpios = <&piod 25 GPIO_ACTIVE_LOW>,
+		   <&piod 27 GPIO_ACTIVE_LOW>;
+
+	status = "okay";
+};
