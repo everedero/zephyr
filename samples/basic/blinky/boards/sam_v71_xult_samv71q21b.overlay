@@ -6,8 +6,6 @@
 };
 
 &qspi {
-	cs-gpios = <&piod 25 GPIO_ACTIVE_LOW>,
-		   <&piod 27 GPIO_ACTIVE_LOW>;
-
+	cs-gpios = <&pioa 11 GPIO_ACTIVE_LOW>;
 	status = "okay";
 };
