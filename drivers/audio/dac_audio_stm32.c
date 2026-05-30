@@ -132,12 +132,15 @@ static int dac_audio_configure(const struct device *dev,
 	LL_DAC_SetTriggerSource(cfg->dac, LL_DAC_CHANNEL_1,
 				LL_DAC_TRIG_EXT_TIM6_TRGO);
 	LL_DAC_EnableTrigger(cfg->dac, LL_DAC_CHANNEL_1);
-	LL_DAC_SetOutputMode(cfg->dac, LL_DAC_CHANNEL_1,
-			     LL_DAC_OUTPUT_MODE_NORMAL);
 	LL_DAC_SetOutputBuffer(cfg->dac, LL_DAC_CHANNEL_1,
 			       LL_DAC_OUTPUT_BUFFER_ENABLE);
+#if defined(LL_DAC_OUTPUT_MODE_NORMAL)
+	/* STM32H7 and other series with extended output mode control */
+	LL_DAC_SetOutputMode(cfg->dac, LL_DAC_CHANNEL_1,
+			     LL_DAC_OUTPUT_MODE_NORMAL);
 	LL_DAC_SetOutputConnection(cfg->dac, LL_DAC_CHANNEL_1,
 				   LL_DAC_OUTPUT_CONNECT_GPIO);
+#endif
 
 	data->dest_addr = LL_DAC_DMA_GetRegAddr(cfg->dac, LL_DAC_CHANNEL_1,
 						 LL_DAC_DMA_REG_DATA_12BITS_RIGHT_ALIGNED);
