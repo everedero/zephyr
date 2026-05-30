@@ -12,3 +12,12 @@
 		};
 	};
 };
+
+&dac1 {
+	dac_audio1: dac-audio {
+		compatible = "st,stm32-dac-audio";
+		st,timer = <&timers6>;
+		st,trig-source = "TIM6_TRGO";
+		status = "disabled";
+	};
+};
