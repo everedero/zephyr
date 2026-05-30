@@ -1,0 +1,63 @@
+description: |
+  STM32 DAC audio output. Implements the audio codec API.
+  Defined as a child node of the DAC node (st,stm32-dac).
+
+  Property, channel and val are not implemented yet.
+  This driver only implements channel 1 output.
+  The maximum driver resolution is 12 bits.
+
+compatible: "st,stm32-dac-audio"
+
+include: [pinctrl-device.yaml]
+
+properties:
+  st,timer:
+    type: phandle
+    required: true
+    description: |
+      Timer whose update event triggers the DAC conversions
+
+  st,trig-source:
+    type: string
+    required: true
+    description: |
+      Trigger source event for the DAC conversion.
+      It has to match the selected st,timer. The trigger event is usually TRG0.
+      Valid values include: "TIM6_TRGO", "TIM7_TRGO", "TIM15_TRGO".
+
+  dmas:
+    required: true
+    type: phandle-array
+    description: |
+      Single TX DMA channel.
+
+  dma-names:
+    required: true
+    type: string-array
+    description: |
+      TX DMA channel name.
+
+  pinctrl-0:
+    required: true
+
+  pinctrl-names:
+    required: true
+
+examples:
+  - |
+    dac1: dac@40007400 {
+        compatible = "st,stm32-dac";
+        reg = <0x40007400 0x400>;
+        clocks = <&rcc STM32_CLOCK(APB1, 29)>;
+        #io-channel-cells = <1>;
+        pinctrl-0 = <&dac_out1_pa4>;
+        pinctrl-names = "default";
+        status = "disabled";
+
+        dac_audio1: dac-audio {
+            compatible = "st,stm32-dac-audio";
+            st,timer = <&timers6>;
+            st,trig-source = "TIM6_TRGO";
+            status = "okay";
+        };
+    };

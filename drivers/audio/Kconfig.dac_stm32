@@ -1,0 +1,32 @@
+# Copyright (c) 2026 Eve Redero
+# SPDX-License-Identifier: Apache-2.0
+
+config AUDIO_CODEC_DAC_STM32
+	bool "STM32 DAC audio codec driver"
+	depends on DT_HAS_ST_STM32_DAC_AUDIO_ENABLED
+	select DMA
+	select PINCTRL
+	help
+	  Audio output codec using the STM32 DAC driver.
+
+if AUDIO_CODEC_DAC_STM32
+
+config DAC_AUDIO_STM32_DOUBLE_BUFFER
+	bool "Internal double-buffer for gapless playback"
+	help
+	  When enabled the driver maintains an internal 2*N sample buffer and
+	  runs DMA in cyclic mode. The half-transfer interrupt fires when the
+	  first half finishes, giving the application a full half-period to
+	  supply the next block via write() before the DMA reaches it.
+
+config DAC_AUDIO_STM32_MAX_BLOCK_SAMPLES
+	int "Maximum samples per audio half-block (double-buffer mode)"
+	default 256
+	range 64 4096
+	depends on DAC_AUDIO_STM32_DOUBLE_BUFFER
+	help
+	  Size of each half of the internal double buffer in 16-bit samples.
+	  Must be >= the block size (in samples) passed to the first write()
+	  call. Memory cost: 2 * this_value * 2 bytes per driver instance.
+
+endif # AUDIO_CODEC_DAC_STM32
