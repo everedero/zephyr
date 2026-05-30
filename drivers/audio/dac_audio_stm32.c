@@ -35,9 +35,35 @@
 
 LOG_MODULE_REGISTER(dac_audio_stm32, CONFIG_AUDIO_CODEC_LOG_LEVEL);
 
+/*
+ * Syntactic trigger-source lookup via DT_STRING_TOKEN.
+ *
+ * The st,trig-source DTS property (e.g. "TIM6") is converted to a bare
+ * token by DT_STRING_TOKEN, then pasted to form LL_DAC_TRIG_EXT_TIM6_TRGO.
+ * No address arithmetic, no ternary chain, no stubs. If the resulting
+ * constant is undefined for the target SoC the build fails at the
+ * .trig_source initialiser with an "undeclared identifier" error.
+ *
+ * Two-level expansion is required: the outer macro forces DT_STRING_TOKEN
+ * to expand fully (to e.g. TIM6), then the inner ## pastes the token
+ * directly without re-expanding it. This avoids the CMSIS definition
+ * TIM6 = ((TIM_TypeDef *)TIM6_BASE) being substituted before the paste.
+ */
+/* The st,trig-source property holds the suffix of the LL constant after
+ * the LL_DAC_TRIG_EXT_ prefix (e.g. "TIM6_TRGO").  Using the full suffix
+ * avoids the CMSIS token TIM6, which is itself a macro expanding to a
+ * cast expression that would break token-pasting if used as an operand.
+ * _PASTE does the ## with t adjacent, so the DT token is not re-expanded. */
+#define _STM32_DAC_TRIG_PASTE(t)  LL_DAC_TRIG_EXT_##t
+#define _STM32_DAC_TRIG_EXPAND(t) _STM32_DAC_TRIG_PASTE(t)
+#define STM32_DAC_TRIG_SOURCE(inst)					\
+	_STM32_DAC_TRIG_EXPAND(						\
+		DT_STRING_TOKEN(DT_DRV_INST(inst), st_trig_source))
+
 struct dac_audio_cfg {
 	DAC_TypeDef *dac;
 	TIM_TypeDef *tim;
+	uint32_t     trig_source;
 	const struct device *dma_dev;
 	uint32_t dma_channel;
 	uint32_t dma_slot;
@@ -129,8 +155,7 @@ static int dac_audio_configure(const struct device *dev,
 	LL_TIM_DisableMasterSlaveMode(cfg->tim);
 
 	/* DAC CH1: timer TRGO trigger, DMA enabled, output buffer on, GPIO connected */
-	LL_DAC_SetTriggerSource(cfg->dac, LL_DAC_CHANNEL_1,
-				LL_DAC_TRIG_EXT_TIM6_TRGO);
+	LL_DAC_SetTriggerSource(cfg->dac, LL_DAC_CHANNEL_1, cfg->trig_source);
 	LL_DAC_EnableTrigger(cfg->dac, LL_DAC_CHANNEL_1);
 	LL_DAC_SetOutputBuffer(cfg->dac, LL_DAC_CHANNEL_1,
 			       LL_DAC_OUTPUT_BUFFER_ENABLE);
@@ -345,6 +370,7 @@ static int dac_audio_init(const struct device *dev)
 				DT_REG_ADDR(DT_PARENT(DT_DRV_INST(index))),	\
 		.tim         = (TIM_TypeDef *)					\
 				DT_REG_ADDR(DT_INST_PHANDLE(index, st_timer)),	\
+		.trig_source = STM32_DAC_TRIG_SOURCE(index),			\
 		.dma_dev     = DEVICE_DT_GET(STM32_DMA_CTLR(index, tx)),	\
 		.dma_channel = DT_INST_DMAS_CELL_BY_NAME(index, tx, channel),	\
 		.dma_slot    = STM32_DMA_SLOT(index, tx, slot),			\

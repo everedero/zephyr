@@ -18,6 +18,17 @@ properties:
       Basic timer (TIM6 or TIM7) whose update event (TRGO) triggers
       DAC conversions at the configured sample rate.
 
+  st,trig-source:
+    type: string
+    required: true
+    description: |
+      LL_DAC_TRIG_EXT_* suffix that selects the DAC external trigger source.
+      The driver prepends LL_DAC_TRIG_EXT_ to form the full LL constant name,
+      so the value must be the part after that prefix (e.g. "TIM6_TRGO",
+      "TIM7_TRGO", "TIM15_TRGO"). The build fails if the resulting constant is
+      undefined for the target SoC, which is the correct error for an
+      unsupported timer/DAC combination.
+
   dmas:
     required: true
     type: phandle-array
