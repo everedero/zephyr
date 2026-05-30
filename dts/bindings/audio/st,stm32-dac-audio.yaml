@@ -1,0 +1,37 @@
+description: |
+  STM32 DAC audio output implementing the Zephyr audio_codec_api.
+  Defined as a child node of the DAC node (st,stm32-dac). The DAC
+  register address and clock are inherited from the parent. The timer
+  used as trigger source is referenced via the st,timer phandle.
+
+  Board overlays add dmas, dma-names, and pinctrl-0 before enabling.
+
+compatible: "st,stm32-dac-audio"
+
+include: [pinctrl-device.yaml]
+
+properties:
+  st,timer:
+    type: phandle
+    required: true
+    description: |
+      Basic timer (TIM6 or TIM7) whose update event (TRGO) triggers
+      DAC conversions at the configured sample rate.
+
+  dmas:
+    required: true
+    type: phandle-array
+    description: |
+      Single TX DMA channel. The DMAMUX request must be the DAC
+      channel 1 DMA request (LL_DMAMUX1_REQ_DAC1_CH1 = 67 on STM32H7).
+
+  dma-names:
+    required: true
+    type: string-array
+    description: '"tx"'
+
+  pinctrl-0:
+    required: true
+
+  pinctrl-names:
+    required: true
