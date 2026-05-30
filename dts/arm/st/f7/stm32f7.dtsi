@@ -942,6 +942,13 @@
 			clocks = <&rcc STM32_CLOCK(APB1, 29)>;
 			status = "disabled";
 			#io-channel-cells = <1>;
+
+			dac_audio1: dac-audio {
+				compatible = "st,stm32-dac-audio";
+				st,timer = <&timers6>;
+				st,trig-source = "TIM6_TRGO";
+				status = "disabled";
+			};
 		};
 
 		dma1: dma@40026000 {
