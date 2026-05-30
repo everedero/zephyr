@@ -1,0 +1,37 @@
+/*
+ * Copyright (c) 2026 Eve Redero
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * STM32H743ZI — DAC1 CH1 audio output
+ *   Trigger: TIM6 TRGO  (DMAMUX1 slot 67)
+ *   Output:  PA4 (DAC_OUT1)
+ */
+
+#include <zephyr/dt-bindings/dma/stm32_dma.h>
+
+/ {
+	aliases {
+		codec0 = &dac_audio1;
+	};
+};
+
+&dac_audio1 {
+	status = "okay";
+	dmas = <&dmamux1 0 67 (STM32_DMA_PERIPH_TX | STM32_DMA_PRIORITY_HIGH)>;
+	dma-names = "tx";
+	pinctrl-0 = <&dac1_out1_pa4>;
+	pinctrl-names = "default";
+};
+
+&timers6 {
+	status = "okay";
+};
+
+/* dma1 must be enabled to activate DMA_STM32 Kconfig, which gates DMAMUX_STM32 */
+&dma1 {
+	status = "okay";
+};
+
+&dmamux1 {
+	status = "okay";
+};

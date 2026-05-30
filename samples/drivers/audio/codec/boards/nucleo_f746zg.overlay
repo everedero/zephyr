@@ -1,0 +1,33 @@
+/*
+ * Copyright (c) 2026 Eve Redero
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * STM32F746ZG — DAC1 CH1 audio output
+ *   Trigger: TIM6 TRGO
+ *   Output:  PA4 (DAC_OUT1)
+ *   DMA:     DMA1 Stream 5 Channel 7 (fixed mapping, no DMAMUX)
+ */
+
+#include <zephyr/dt-bindings/dma/stm32_dma.h>
+
+/ {
+	aliases {
+		codec0 = &dac_audio1;
+	};
+};
+
+&dac_audio1 {
+	status = "okay";
+	dmas = <&dma1 5 7 (STM32_DMA_PERIPH_TX | STM32_DMA_PRIORITY_HIGH) 0x0>;
+	dma-names = "tx";
+	pinctrl-0 = <&dac_out1_pa4>;
+	pinctrl-names = "default";
+};
+
+&timers6 {
+	status = "okay";
+};
+
+&dma1 {
+	status = "okay";
+};
