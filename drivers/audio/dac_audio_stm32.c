@@ -70,6 +70,10 @@ struct dac_audio_cfg {
 	const struct pinctrl_dev_config *pcfg;
 	const struct stm32_pclken *pclken;
 	size_t pclk_len;
+	/* Timer clock source entry (clocks[1] of the timer node) used only
+	 * with clock_control_get_rate() — already accounts for the APB×2
+	 * multiplier so no manual factor is needed. */
+	struct stm32_pclken tim_clksrc;
 };
 
 struct dac_audio_data {
@@ -113,7 +117,7 @@ static int dac_audio_configure(const struct device *dev,
 	struct dac_audio_data *data = dev->data;
 	const struct device *clk = DEVICE_DT_GET(STM32_CLOCK_CONTROL_NODE);
 	uint32_t sample_rate = (uint32_t)audio_cfg->dai_cfg.pcm.samplerate;
-	uint32_t apb_rate, tim_clk, arr;
+	uint32_t tim_clk, arr;
 	int ret;
 
 	/* Enable DAC and timer clocks */
@@ -125,15 +129,17 @@ static int dac_audio_configure(const struct device *dev,
 		}
 	}
 
-	/* Get timer APB clock rate; timer clock = 2× APB when APB prescaler ≠ 1 */
+	/* Get the actual timer input clock from the TIMPCLK source selector
+	 * (clocks[1] of the timer node).  The clock control driver already
+	 * applies the ×2 multiplier when the APB prescaler ≠ 1 and returns
+	 * the AHB clock when it equals 1, so no manual factor is needed. */
 	ret = clock_control_get_rate(clk,
-				     (clock_control_subsys_t)&cfg->pclken[1],
-				     &apb_rate);
+				     (clock_control_subsys_t)&cfg->tim_clksrc,
+				     &tim_clk);
 	if (ret < 0) {
 		LOG_ERR("clock_control_get_rate failed: %d", ret);
 		return ret;
 	}
-	tim_clk = apb_rate * 2;
 
 	if (sample_rate == 0 || (tim_clk % sample_rate) != 0) {
 		LOG_ERR("Sample rate %u Hz not exactly achievable (tim_clk=%u)",
@@ -344,10 +350,13 @@ static int dac_audio_init(const struct device *dev)
 }
 
 /*
- * pclken[0]: DAC clock  — from parent dac1 node's clocks[0]
- * pclken[1]: timer clock — from &timers6 node's clocks[0]
- *            (index 0 is the peripheral enable; index 1 is the TIMPCLK
- *            source selector which is not needed for clock_control_on)
+ * pclken[0]: DAC clock    — clocks[0] of the parent dac node
+ * pclken[1]: timer enable — clocks[0] of the st,timer node
+ * tim_clksrc:               clocks[1] of the st,timer node (TIMPCLK source
+ *                           selector); used only with clock_control_get_rate(),
+ *                           NOT with clock_control_on().  The clock driver
+ *                           applies the ×2 rule internally, so no manual
+ *                           factor is needed in the driver.
  */
 #define DAC_AUDIO_INIT(index)							\
 	PINCTRL_DT_INST_DEFINE(index);						\
@@ -381,6 +390,12 @@ static int dac_audio_init(const struct device *dev)
 		.pcfg        = PINCTRL_DT_INST_DEV_CONFIG_GET(index),		\
 		.pclken      = pclken_##index,					\
 		.pclk_len    = 2,						\
+		.tim_clksrc  = {						\
+			.bus = DT_CLOCKS_CELL_BY_IDX(				\
+				DT_INST_PHANDLE(index, st_timer), 1, bus),	\
+			.enr = DT_CLOCKS_CELL_BY_IDX(				\
+				DT_INST_PHANDLE(index, st_timer), 1, bits),	\
+		},								\
 	};									\
 										\
 	DEVICE_DT_INST_DEFINE(index, dac_audio_init, NULL,			\
