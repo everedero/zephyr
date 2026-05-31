@@ -117,12 +117,44 @@ static void dma_tx_callback(const struct device *dma_dev, void *user_data,
 	}
 
 	/*
-	 * Reload DMA at ISR time from the pre-queued buffer so the gap
-	 * between transfers is only IRQ latency, not user callback time.
-	 * The user callback then prepares the FOLLOWING buffer and calls
-	 * write() to queue it for the next completion.
+	 * Two-pass reload to cover both the zero-gap (double-prime) and the
+	 * single-prime (backward-compat) usage patterns.
+	 *
+	 * Pass 1 — pre-queued: buffer was staged by write() before this ISR
+	 *           fired; reload immediately for minimum inter-buffer gap.
+	 * Pass 2 — fallback: no pre-queue existed; the user callback fills a
+	 *           buffer and calls write() which sets next_valid; reload now
+	 *           so DMA restarts before the next timer tick causes DMAUDR.
 	 */
+	bool reloaded = false;
+
 	if (data->next_valid) {
+#if defined(CONFIG_CACHE_MANAGEMENT) && defined(CONFIG_CPU_HAS_DCACHE)
+		sys_cache_data_flush_range(data->next_buf, data->next_size);
+#endif
+		ret = dma_reload(cfg->dma_dev, cfg->dma_channel,
+				 (uint32_t)data->next_buf, data->dest_addr,
+				 data->next_size);
+		if (ret == 0) {
+			ret = dma_start(cfg->dma_dev, cfg->dma_channel);
+		}
+		data->next_valid = false;
+		reloaded = true;
+		if (ret < 0) {
+			LOG_ERR("DMA reload failed: %d, stopping", ret);
+			LL_TIM_DisableCounter(cfg->tim);
+			LL_DAC_DisableDMAReq(cfg->dac, LL_DAC_CHANNEL_1);
+			LL_DAC_Disable(cfg->dac, LL_DAC_CHANNEL_1);
+			data->running = false;
+			return;
+		}
+	}
+
+	if (data->tx_cb != NULL) {
+		data->tx_cb(dev, data->tx_cb_user_data);
+	}
+
+	if (!reloaded && data->next_valid) {
 #if defined(CONFIG_CACHE_MANAGEMENT) && defined(CONFIG_CPU_HAS_DCACHE)
 		sys_cache_data_flush_range(data->next_buf, data->next_size);
 #endif
@@ -139,12 +171,7 @@ static void dma_tx_callback(const struct device *dma_dev, void *user_data,
 			LL_DAC_DisableDMAReq(cfg->dac, LL_DAC_CHANNEL_1);
 			LL_DAC_Disable(cfg->dac, LL_DAC_CHANNEL_1);
 			data->running = false;
-			return;
 		}
-	}
-
-	if (data->tx_cb != NULL) {
-		data->tx_cb(dev, data->tx_cb_user_data);
 	}
 }
 
@@ -152,12 +179,25 @@ static void dac_audio_isr(const struct device *dev)
 {
 	const struct dac_audio_cfg *cfg = dev->config;
 	struct dac_audio_data *data = dev->data;
+	struct dma_status st;
 
 	if (!LL_DAC_IsActiveFlag_DMAUDR1(cfg->dac)) {
 		return;
 	}
 
 	LL_DAC_ClearFlag_DMAUDR1(cfg->dac);
+
+	/*
+	 * A transient underrun can occur in the single-sample window between
+	 * DMA completing its last transfer and the DMA TC callback restarting
+	 * it (fallback reload path in dma_tx_callback).  If DMA is already
+	 * running again by the time we get here, treat it as benign.
+	 */
+	if (dma_get_status(cfg->dma_dev, cfg->dma_channel, &st) == 0 &&
+	    st.busy) {
+		return;
+	}
+
 	LOG_ERR("DAC DMA underrun on CH1 — stopping");
 
 	LL_TIM_DisableCounter(cfg->tim);
@@ -313,6 +353,7 @@ static int dac_audio_start(const struct device *dev, audio_dai_dir_t dir)
 	LL_DAC_Enable(cfg->dac, LL_DAC_CHANNEL_1);
 	k_busy_wait(10);
 
+	LL_DAC_ClearFlag_DMAUDR1(cfg->dac);
 	LL_DAC_EnableIT_DMAUDR1(cfg->dac);
 	LL_DAC_EnableDMAReq(cfg->dac, LL_DAC_CHANNEL_1);
 	LL_TIM_EnableCounter(cfg->tim);
