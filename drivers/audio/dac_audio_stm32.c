@@ -84,6 +84,12 @@ struct dac_audio_data {
 	struct dma_block_config dma_block;
 	audio_codec_tx_done_callback_t tx_cb;
 	void *tx_cb_user_data;
+	/* Pre-queued next buffer: set by write() while DMA is running so the
+	 * reload happens at ISR time (before the user callback), eliminating
+	 * the buffer-fill time from the inter-buffer gap. */
+	uint8_t *next_buf;
+	size_t   next_size;
+	bool     next_valid;
 };
 
 static void dma_tx_callback(const struct device *dma_dev, void *user_data,
@@ -92,6 +98,7 @@ static void dma_tx_callback(const struct device *dma_dev, void *user_data,
 	const struct device *dev = user_data;
 	const struct dac_audio_cfg *cfg = dev->config;
 	struct dac_audio_data *data = dev->data;
+	int ret;
 
 	ARG_UNUSED(dma_dev);
 	ARG_UNUSED(channel);
@@ -102,7 +109,35 @@ static void dma_tx_callback(const struct device *dma_dev, void *user_data,
 		LL_DAC_DisableDMAReq(cfg->dac, LL_DAC_CHANNEL_1);
 		LL_DAC_Disable(cfg->dac, LL_DAC_CHANNEL_1);
 		data->running = false;
+		data->next_valid = false;
 		return;
+	}
+
+	/*
+	 * Reload DMA at ISR time from the pre-queued buffer so the gap
+	 * between transfers is only IRQ latency, not user callback time.
+	 * The user callback then prepares the FOLLOWING buffer and calls
+	 * write() to queue it for the next completion.
+	 */
+	if (data->next_valid) {
+#if defined(CONFIG_CACHE_MANAGEMENT) && defined(CONFIG_CPU_HAS_DCACHE)
+		sys_cache_data_flush_range(data->next_buf, data->next_size);
+#endif
+		ret = dma_reload(cfg->dma_dev, cfg->dma_channel,
+				 (uint32_t)data->next_buf, data->dest_addr,
+				 data->next_size);
+		if (ret == 0) {
+			ret = dma_start(cfg->dma_dev, cfg->dma_channel);
+		}
+		data->next_valid = false;
+		if (ret < 0) {
+			LOG_ERR("DMA reload failed: %d, stopping", ret);
+			LL_TIM_DisableCounter(cfg->tim);
+			LL_DAC_DisableDMAReq(cfg->dac, LL_DAC_CHANNEL_1);
+			LL_DAC_Disable(cfg->dac, LL_DAC_CHANNEL_1);
+			data->running = false;
+			return;
+		}
 	}
 
 	if (data->tx_cb != NULL) {
@@ -202,11 +237,14 @@ static int dac_audio_write(const struct device *dev, uint8_t *buf, size_t size)
 	struct dac_audio_data *data = dev->data;
 	int ret;
 
-#if defined(CONFIG_CACHE_MANAGEMENT) && defined(CONFIG_CPU_HAS_DCACHE)
-	sys_cache_data_flush_range(buf, size);
-#endif
-
 	if (!data->dma_configured) {
+		/*
+		 * First call (prime): configure and start DMA now.  Cache flush
+		 * happens here because the DMA will read this buffer directly.
+		 */
+#if defined(CONFIG_CACHE_MANAGEMENT) && defined(CONFIG_CPU_HAS_DCACHE)
+		sys_cache_data_flush_range(buf, size);
+#endif
 		memset(&data->dma_block, 0, sizeof(data->dma_block));
 		data->dma_block.source_address  = (uint32_t)buf;
 		data->dma_block.dest_address    = data->dest_addr;
@@ -226,18 +264,16 @@ static int dac_audio_write(const struct device *dev, uint8_t *buf, size_t size)
 		}
 		data->dma_configured = true;
 	} else {
-		ret = dma_reload(cfg->dma_dev, cfg->dma_channel,
-				 (uint32_t)buf, data->dest_addr, size);
-		if (ret < 0) {
-			LOG_ERR("dma_reload failed: %d", ret);
-			return ret;
-		}
-		ret = dma_start(cfg->dma_dev, cfg->dma_channel);
-		if (ret < 0) {
-			LOG_ERR("dma_start failed: %d", ret);
-		}
+		/*
+		 * DMA already running: pre-queue the buffer so dma_tx_callback()
+		 * can reload at ISR time before invoking the user callback.
+		 * Cache flush is deferred to the callback to keep write() fast.
+		 */
+		data->next_buf   = buf;
+		data->next_size  = size;
+		data->next_valid = true;
 	}
-	return ret;
+	return 0;
 }
 
 static int dac_audio_start(const struct device *dev, audio_dai_dir_t dir)
@@ -276,6 +312,7 @@ static int dac_audio_stop(const struct device *dev, audio_dai_dir_t dir)
 
 	data->running = false;
 	data->dma_configured = false;
+	data->next_valid = false;
 
 	LOG_INF("TX stopped");
 	return 0;
