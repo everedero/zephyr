@@ -93,6 +93,14 @@ struct dac_audio_data {
 	uint8_t *next_buf;
 	size_t   next_size;
 	bool     next_valid;
+#ifdef CONFIG_DAC_AUDIO_STM32_DOUBLE_BUFFER
+	/* Internal double buffer for cyclic DMA.  DMA runs on dbl_buf[0..2N)
+	 * continuously; write() copies into the idle half while the active
+	 * half plays.  Cache-line aligned so partial flushes are safe. */
+	uint16_t __aligned(32) dbl_buf[2 * CONFIG_DAC_AUDIO_STM32_MAX_BLOCK_SAMPLES];
+	uint8_t  active_half; /* 0 or 1 — half currently being played by DMA */
+	size_t   half_bytes;  /* bytes in one half = block size from first write() */
+#endif
 };
 
 static void dma_tx_callback(const struct device *dma_dev, void *user_data,
@@ -106,7 +114,7 @@ static void dma_tx_callback(const struct device *dma_dev, void *user_data,
 	ARG_UNUSED(dma_dev);
 	ARG_UNUSED(channel);
 
-	if (status != 0) {
+	if (status < 0) {
 		LOG_ERR("DMA error status=%d, stopping", status);
 		LL_TIM_DisableCounter(cfg->tim);
 		LL_DAC_DisableDMAReq(cfg->dac, LL_DAC_CHANNEL_1);
@@ -115,6 +123,21 @@ static void dma_tx_callback(const struct device *dma_dev, void *user_data,
 		data->next_valid = false;
 		return;
 	}
+
+#ifdef CONFIG_DAC_AUDIO_STM32_DOUBLE_BUFFER
+	/*
+	 * Cyclic double-buffer mode.  DMA_STATUS_BLOCK = half-transfer (DMA
+	 * has finished the first half and is now consuming the second half).
+	 * DMA_STATUS_COMPLETE = full-cycle wrap (second half done, DMA wraps
+	 * to the first half).  Update active_half so write() copies into the
+	 * correct idle half, then notify the application.
+	 */
+	data->active_half = (status == DMA_STATUS_BLOCK) ? 1U : 0U;
+	if (data->tx_cb != NULL) {
+		data->tx_cb(dev, data->tx_cb_user_data);
+	}
+	return;
+#endif /* CONFIG_DAC_AUDIO_STM32_DOUBLE_BUFFER */
 
 	/*
 	 * Two-pass reload to cover both the zero-gap (double-prime) and the
@@ -302,6 +325,56 @@ static int dac_audio_write(const struct device *dev, uint8_t *buf, size_t size)
 	struct dac_audio_data *data = dev->data;
 	int ret;
 
+#ifdef CONFIG_DAC_AUDIO_STM32_DOUBLE_BUFFER
+	if (!data->dma_configured) {
+		/*
+		 * First write: fill both halves of the internal buffer with the
+		 * same initial content so DMA plays valid data from the start
+		 * even before the first half-transfer callback fires.
+		 */
+		data->half_bytes = size;
+		memcpy(data->dbl_buf, buf, size);
+		memcpy((uint8_t *)data->dbl_buf + size, buf, size);
+#if defined(CONFIG_CACHE_MANAGEMENT) && defined(CONFIG_CPU_HAS_DCACHE)
+		sys_cache_data_flush_range(data->dbl_buf, 2U * size);
+#endif
+		memset(&data->dma_block, 0, sizeof(data->dma_block));
+		data->dma_block.source_address   = (uint32_t)data->dbl_buf;
+		data->dma_block.dest_address     = data->dest_addr;
+		data->dma_block.block_size       = 2U * size;
+		data->dma_block.source_addr_adj  = DMA_ADDR_ADJ_INCREMENT;
+		data->dma_block.dest_addr_adj    = DMA_ADDR_ADJ_NO_CHANGE;
+		data->dma_block.source_reload_en = 1; /* cyclic: wrap at end */
+
+		ret = dma_config(cfg->dma_dev, cfg->dma_channel, &data->dma_cfg);
+		if (ret < 0) {
+			LOG_ERR("dma_config failed: %d", ret);
+			return ret;
+		}
+		ret = dma_start(cfg->dma_dev, cfg->dma_channel);
+		if (ret < 0) {
+			LOG_ERR("dma_start failed: %d", ret);
+			return ret;
+		}
+		data->dma_configured = true;
+		data->active_half    = 0;
+	} else {
+		/*
+		 * Subsequent writes: copy into the idle half while DMA plays
+		 * the active half.  The cache flush covers only the half being
+		 * written, not the half currently under DMA.
+		 */
+		uint8_t idle = 1U - data->active_half;
+		void   *dst  = (uint8_t *)data->dbl_buf + (size_t)idle * data->half_bytes;
+
+		memcpy(dst, buf, data->half_bytes);
+#if defined(CONFIG_CACHE_MANAGEMENT) && defined(CONFIG_CPU_HAS_DCACHE)
+		sys_cache_data_flush_range(dst, data->half_bytes);
+#endif
+	}
+	return 0;
+#endif /* CONFIG_DAC_AUDIO_STM32_DOUBLE_BUFFER */
+
 	if (!data->dma_configured) {
 		/*
 		 * First call (prime): configure and start DMA now.  Cache flush
@@ -381,6 +454,9 @@ static int dac_audio_stop(const struct device *dev, audio_dai_dir_t dir)
 	data->running = false;
 	data->dma_configured = false;
 	data->next_valid = false;
+#ifdef CONFIG_DAC_AUDIO_STM32_DOUBLE_BUFFER
+	data->active_half = 0;
+#endif
 
 	LOG_INF("TX stopped");
 	return 0;
