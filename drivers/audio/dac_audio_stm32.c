@@ -213,6 +213,11 @@ static int dac_audio_write(const struct device *dev, uint8_t *buf, size_t size)
 			LOG_ERR("dma_config failed: %d", ret);
 			return ret;
 		}
+		ret = dma_start(cfg->dma_dev, cfg->dma_channel);
+		if (ret < 0) {
+			LOG_ERR("dma_start failed: %d", ret);
+			return ret;
+		}
 		data->dma_configured = true;
 	} else {
 		ret = dma_reload(cfg->dma_dev, cfg->dma_channel,
@@ -221,11 +226,10 @@ static int dac_audio_write(const struct device *dev, uint8_t *buf, size_t size)
 			LOG_ERR("dma_reload failed: %d", ret);
 			return ret;
 		}
-	}
-
-	ret = dma_start(cfg->dma_dev, cfg->dma_channel);
-	if (ret < 0) {
-		LOG_ERR("dma_start failed: %d", ret);
+		ret = dma_start(cfg->dma_dev, cfg->dma_channel);
+		if (ret < 0) {
+			LOG_ERR("dma_start failed: %d", ret);
+		}
 	}
 	return ret;
 }
