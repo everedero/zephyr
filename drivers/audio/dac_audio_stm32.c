@@ -344,7 +344,8 @@ static int dac_audio_write(const struct device *dev, uint8_t *buf, size_t size)
 		data->dma_block.block_size       = 2U * size;
 		data->dma_block.source_addr_adj  = DMA_ADDR_ADJ_INCREMENT;
 		data->dma_block.dest_addr_adj    = DMA_ADDR_ADJ_NO_CHANGE;
-		data->dma_block.source_reload_en = 1; /* cyclic: wrap at end */
+		data->dma_block.source_reload_en = 1; /* cyclic */
+		data->dma_block.dest_reload_en   = 1;
 
 		ret = dma_config(cfg->dma_dev, cfg->dma_channel, &data->dma_cfg);
 		if (ret < 0) {
