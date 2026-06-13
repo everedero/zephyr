@@ -1,0 +1,29 @@
+description: Atmel SAM DACC audio output (child node of atmel,sam-dac).
+
+compatible: "atmel,sam-dacc-audio"
+
+include: [pinctrl-device.yaml, base.yaml]
+
+properties:
+  atmel,timer:
+    type: phandle
+    required: true
+    description: TC peripheral used as sample-rate trigger.
+
+  atmel,tc-channel:
+    type: int
+    required: true
+    description: TC channel index (0=CH0, 1=CH1, 2=CH2).
+
+  atmel,trig-sel:
+    type: int
+    required: true
+    description: >
+      DACC_MR TRGSEL field value selecting the trigger source
+      (1=TC0, 2=TC1, 3=TC2).
+
+  pinctrl-0:
+    required: true
+
+  pinctrl-names:
+    required: true

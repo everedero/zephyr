@@ -1,0 +1,20 @@
+config AUDIO_CODEC_DAC_SAM
+	bool "Atmel SAM DACC audio codec driver (PDC DMA)"
+	depends on DT_HAS_ATMEL_SAM_DACC_AUDIO_ENABLED
+	select PINCTRL
+	help
+	  Audio output via Atmel SAM DACC peripheral with PDC double-buffering.
+	  Implements the audio_codec API with ping-pong DMA using the DACC's
+	  integrated Peripheral DMA Controller (PDC).
+
+if AUDIO_CODEC_DAC_SAM
+
+config DAC_AUDIO_SAM_MAX_BLOCK_SAMPLES
+	int "Max samples per DMA half-block"
+	default 256
+	range 64 4096
+	help
+	  Size of each half of the internal double-buffer in 16-bit samples.
+	  The full buffer is twice this size.
+
+endif # AUDIO_CODEC_DAC_SAM
