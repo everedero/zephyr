@@ -267,6 +267,11 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 			#io-channel-cells = <1>;
+			/* MCK=84 MHz: ADCClock = 84/(2*(3+1)) = 10.5 MHz < 20 MHz max */
+			prescaler = <3>;
+			startup-time = <512>;
+			settling-time = <3>;
+			tracking-time = <3>;
 			status = "disabled";
 		};
 
