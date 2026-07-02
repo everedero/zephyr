@@ -31,6 +31,8 @@ LOG_MODULE_REGISTER(i2c_sam_twihs);
 
 #include "i2c-priv.h"
 
+/** I2C bus speed [Hz] in Slow Mode */
+#define BUS_SPEED_SLOW_HZ              20000U
 /** I2C bus speed [Hz] in Standard Mode */
 #define BUS_SPEED_STANDARD_HZ         100000U
 /** I2C bus speed [Hz] in Fast Mode */
@@ -128,6 +130,13 @@ static int i2c_sam_twihs_configure(const struct device *dev, uint32_t config)
 		break;
 	case I2C_SPEED_FAST:
 		bitrate = BUS_SPEED_FAST_HZ;
+		break;
+	case I2C_SPEED_DT:
+		/* Use the raw Hz value from the devicetree clock-frequency
+		 * property directly. i2c_clk_set() computes CWGR for any
+		 * valid frequency, so no further translation is needed.
+		 */
+		bitrate = dev_cfg->bitrate;
 		break;
 	default:
 		LOG_ERR("Unsupported I2C speed value");
