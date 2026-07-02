@@ -25,6 +25,8 @@ extern "C" {
 static inline uint32_t i2c_map_dt_bitrate(uint32_t bitrate)
 {
 	switch (bitrate) {
+	case I2C_BITRATE_SLOW:
+		return I2C_SPEED_DT << I2C_SPEED_SHIFT;
 	case I2C_BITRATE_STANDARD:
 		return I2C_SPEED_STANDARD << I2C_SPEED_SHIFT;
 	case I2C_BITRATE_FAST:
