@@ -1,0 +1,38 @@
+/*
+ * Copyright (c) 2026 Eve Redero
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#include <zephyr/dt-bindings/dma/stm32_dma.h>
+
+/ {
+	aliases {
+		codec0 = &dac_audio1;
+	};
+};
+
+/*
+ * DAC1 CH1 DMA: DMA1 stream 5, channel 7 (STM32F7 RM, Table 27).
+ * Timer 6 update event (TRGO) triggers DAC conversions at sample_rate Hz.
+ */
+
+&dma1 {
+	status = "okay";
+};
+
+/* Hand DAC1 hardware to the audio driver; disable the plain DAC driver */
+&dac1 {
+	status = "disabled";
+	dac_audio1: dac_audio {
+		compatible = "st,stm32-dac-audio";
+		st,timer = <&timers6>;
+		st,trig-source = "TIM6_TRGO";
+		dmas = <&dma1 5 7
+			(STM32_DMA_PERIPH_TX | STM32_DMA_16BITS | STM32_DMA_PRIORITY_HIGH)
+			0>;
+		dma-names = "tx";
+		pinctrl-0 = <&dac_out1_pa4>;
+		pinctrl-names = "default";
+		status = "okay";
+	};
+};
