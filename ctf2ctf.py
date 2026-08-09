@@ -123,7 +123,10 @@ def handle_thread_event(event, timestamp):
                                              'thread_suspend']):
         ph = 'E'
     else:
-        raise Exception(f'THREAD OTHER: {event.name}')
+        # thread_sched_lock/unlock/pend/ready/... : no thread_id payload,
+        # just drop them on the 'general' track as instant events.
+        g_events.append(format_json(event.name, timestamp, 'i', 0))
+        return
 
     tid = event.payload_field['thread_id']
 
@@ -407,7 +410,9 @@ def main():
             tid = 6
 
         else:
-            raise Exception(f'Unknown event: {event.name} payload {event.payload_field}')
+            # Unclassified event (sys_init_*, k_sleep_*, ...): show it on the
+            # 'general' track instead of aborting the whole conversion.
+            meta = {k: str(v) for k, v in event.payload_field.items()} or None
 
         # FIXME: move this next to the generated events
         g_events.append(format_json(name, timestamp, ph, tid, meta))
