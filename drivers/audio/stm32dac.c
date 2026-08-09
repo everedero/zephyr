@@ -22,6 +22,7 @@
 #include <zephyr/drivers/dma/dma_stm32.h>
 #endif
 #include <zephyr/audio/codec.h>
+#include <zephyr/tracing/tracing.h>
 
 #include <soc.h>
 #include <stm32_ll_dac.h>
@@ -414,6 +415,11 @@ static void stm32_dac_dma_callback(const struct device *dev, void *user_data, ui
 		return;
 	}
 
+	/* isr_enter carries no vector number: name ourselves so the callback is
+	 * tellable from systick in the trace.
+	 */
+	sys_trace_named_event("dac_dma_cb", channel, (uint32_t)status);
+
 	if (dac_data->writable) {
 		LOG_WRN_RATELIMIT("underrun: block not written in time, stale samples played");
 	}
@@ -463,6 +469,12 @@ static void stm32_dac_counter_callback(const struct device *counter_dev, void *u
 		done_index = samples;
 		dac_data->play_index = 0;
 	}
+
+	/* Only on the half-block boundary, at the same rate as the DMA path: a
+	 * marker per sample would fill the RAM trace buffer in a fraction of a
+	 * second.
+	 */
+	sys_trace_named_event("dac_isr_cb", (uint32_t)done_index, 0);
 
 	if (dac_data->writable) {
 		LOG_WRN_RATELIMIT("underrun: block not written in time, stale samples played");
