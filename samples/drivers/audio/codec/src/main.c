@@ -75,7 +75,7 @@ int main(void)
 		.dai_cfg.pcm.pcm_width = AUDIO_PCM_WIDTH_16_BITS,
 		.dai_cfg.pcm.channels = 1,
 		.dai_cfg.pcm.block_size = AUDIO_BLOCK_SIZE,
-		.dai_cfg.pcm.samplerate = AUDIO_PCM_RATE_16K,
+		.dai_cfg.pcm.samplerate = AUDIO_PCM_RATE_48K,
 	};
 
 	LOG_INF("Audio codec sample");
