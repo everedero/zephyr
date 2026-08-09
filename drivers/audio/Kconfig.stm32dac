@@ -2,14 +2,26 @@
 # SPDX-License-Identifier: Apache-2.0
 
 config AUDIO_DAC_STM32
-	bool "STM32 DAC audio playback driver (timer-triggered DMA)"
+	bool "STM32 DAC audio playback driver"
 	default y
 	depends on DT_HAS_ST_STM32_DAC_AUDIO_ENABLED
 	select DAC
 	select COUNTER
-	select DMA
 	help
 	  Enable audio playback through an STM32 on-chip DAC channel.
+
+config AUDIO_DAC_STM32_DMA
+	bool "Use DMA to feed the DAC"
+	depends on AUDIO_DAC_STM32
+	default y
+	select DMA
+	help
+	  Feed the DAC from a circular DMA channel, one interrupt per
+	  half-buffer. Requires a "dmas" property on the node.
+
+	  Disable to fall back to a per-sample timer interrupt that writes
+	  every sample by hand: same audio, far more CPU, which makes the
+	  cost of DMA visible in a trace.
 
 config AUDIO_DAC_STM32_MAX_BLOCK_SIZE
 	int "STM32 DAC audio maximum block size in bytes"

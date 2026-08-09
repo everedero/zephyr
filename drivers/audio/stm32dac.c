@@ -17,8 +17,10 @@
 #include <zephyr/sys/byteorder.h>
 #include <zephyr/drivers/counter.h>
 #include <zephyr/drivers/dac.h>
+#ifdef CONFIG_AUDIO_DAC_STM32_DMA
 #include <zephyr/drivers/dma.h>
 #include <zephyr/drivers/dma/dma_stm32.h>
+#endif
 #include <zephyr/audio/codec.h>
 
 #include <soc.h>
@@ -65,23 +67,38 @@ struct stm32_dac_cfg {
 	uint32_t dac_trigger;
 	TIM_TypeDef *tim_base;
 	const struct device *counter_dev;
+#ifdef CONFIG_AUDIO_DAC_STM32_DMA
 	const struct device *dma_dev;
 	uint32_t dma_channel;
 	uint32_t dma_slot;
+#endif
 };
 
 struct stm32_dac_data {
 	struct audio_codec_cfg config;
 	audio_codec_tx_done_callback_t tx_cb;
 	void *tx_cb_user_data;
+#ifdef CONFIG_AUDIO_DAC_STM32_DMA
 	struct dma_config dma_cfg;
 	struct dma_block_config dma_block;
-	uint16_t dma_buf[2 * STM32_DAC_SAMPLES_PER_BLOCK];
-	uint16_t *write_buf;
-	bool writable;
-	bool started;
+#else
+	/* Index of the next sample to push, walks the whole ring. */
+	size_t play_index;
+#endif
+	uint16_t buf[2 * STM32_DAC_SAMPLES_PER_BLOCK];
+	/* Flipped from interrupt context, read from thread context. */
+	uint16_t *volatile write_buf;
+	volatile bool writable;
+	volatile bool started;
 	bool configured;
 };
+
+#ifdef CONFIG_AUDIO_DAC_STM32_DMA
+static void stm32_dac_dma_callback(const struct device *dev, void *user_data, uint32_t channel,
+				   int status);
+#else
+static void stm32_dac_counter_callback(const struct device *counter_dev, void *user_data);
+#endif
 
 static int stm32_dac_configure(const struct device *dev, struct audio_codec_cfg *cfg)
 {
@@ -132,7 +149,13 @@ static int stm32_dac_configure(const struct device *dev, struct audio_codec_cfg 
 
 	struct counter_top_cfg top_cfg = {
 		.ticks = ticks - 1U,
+#ifdef CONFIG_AUDIO_DAC_STM32_DMA
+		/* The DAC is fed by DMA off TRGO, nothing to do per period. */
 		.callback = NULL,
+#else
+		.callback = stm32_dac_counter_callback,
+		.user_data = (void *)dev,
+#endif
 		.flags = 0,
 	};
 
@@ -148,9 +171,14 @@ static int stm32_dac_configure(const struct device *dev, struct audio_codec_cfg 
 
 	LL_DAC_SetOutputBuffer(dac_cfg->dac_base, dac_cfg->dac_ll_channel,
 			       LL_DAC_OUTPUT_BUFFER_ENABLE);
+#ifdef CONFIG_AUDIO_DAC_STM32_DMA
 	LL_DAC_SetTriggerSource(dac_cfg->dac_base, dac_cfg->dac_ll_channel, dac_cfg->dac_trigger);
 	LL_DAC_EnableTrigger(dac_cfg->dac_base, dac_cfg->dac_ll_channel);
 	LL_DAC_EnableDMAReq(dac_cfg->dac_base, dac_cfg->dac_ll_channel);
+#else
+	/* The per-sample interrupt does the pacing, so convert on write. */
+	LL_DAC_DisableTrigger(dac_cfg->dac_base, dac_cfg->dac_ll_channel);
+#endif
 	LL_DAC_Enable(dac_cfg->dac_base, dac_cfg->dac_ll_channel);
 
 	dac_data->config = *cfg;
@@ -161,9 +189,6 @@ static int stm32_dac_configure(const struct device *dev, struct audio_codec_cfg 
 
 	return 0;
 }
-
-static void stm32_dac_dma_callback(const struct device *dev, void *user_data, uint32_t channel,
-				   int status);
 
 static void stm32_dac_start_output(const struct device *dev)
 {
@@ -180,8 +205,9 @@ static void stm32_dac_start_output(const struct device *dev)
 		return;
 	}
 
+#ifdef CONFIG_AUDIO_DAC_STM32_DMA
 	dac_data->dma_block = (struct dma_block_config){
-		.source_address = (uint32_t)dac_data->dma_buf,
+		.source_address = (uint32_t)dac_data->buf,
 		.dest_address = LL_DAC_DMA_GetRegAddr(dac_cfg->dac_base, dac_cfg->dac_ll_channel,
 						      LL_DAC_DMA_REG_DATA_12BITS_LEFT_ALIGNED),
 		.block_size = 2U * dac_data->config.dai_cfg.pcm.block_size,
@@ -221,8 +247,22 @@ static void stm32_dac_start_output(const struct device *dev)
 		dma_stop(dac_cfg->dma_dev, dac_cfg->dma_channel);
 		return;
 	}
+#else
+	/* Nothing has been written yet: start out on mid-scale silence. */
+	for (size_t i = 0; i < ARRAY_SIZE(dac_data->buf); i++) {
+		dac_data->buf[i] = STM32_DAC_PCM_SIGN_BIT;
+	}
+	dac_data->play_index = 0;
 
-	dac_data->write_buf = dac_data->dma_buf;
+	int ret = counter_start(dac_cfg->counter_dev);
+
+	if (ret < 0) {
+		LOG_ERR("start: counter_start failed (%d)", ret);
+		return;
+	}
+#endif
+
+	dac_data->write_buf = dac_data->buf;
 	dac_data->writable = true;
 	dac_data->started = true;
 
@@ -249,10 +289,12 @@ static void stm32_dac_stop_output(const struct device *dev)
 		LOG_ERR("stop: counter_stop failed (%d)", ret);
 	}
 
+#ifdef CONFIG_AUDIO_DAC_STM32_DMA
 	ret = dma_stop(dac_cfg->dma_dev, dac_cfg->dma_channel);
 	if (ret < 0) {
 		LOG_ERR("stop: dma_stop ch %" PRIu32 " failed (%d)", dac_cfg->dma_channel, ret);
 	}
+#endif
 
 	dac_data->started = false;
 	dac_data->writable = false;
@@ -359,6 +401,7 @@ static int stm32_dac_register_done_callback(const struct device *dev,
 	return 0;
 }
 
+#ifdef CONFIG_AUDIO_DAC_STM32_DMA
 static void stm32_dac_dma_callback(const struct device *dev, void *user_data, uint32_t channel,
 				   int status)
 {
@@ -383,23 +426,68 @@ static void stm32_dac_dma_callback(const struct device *dev, void *user_data, ui
 		LOG_WRN_RATELIMIT("dma ch %" PRIu32 " unexpected status %d", channel, status);
 	}
 
-	dac_data->write_buf = &(dac_data->dma_buf[write_index]);
+	dac_data->write_buf = &(dac_data->buf[write_index]);
 	dac_data->writable = true;
 
 	if (dac_data->tx_cb != NULL) {
 		dac_data->tx_cb(codec_dev, dac_data->tx_cb_user_data);
 	}
 }
+#else
+/*
+ * The "stupid" feed: one interrupt per sample, no hardware help beyond the
+ * timer. Same double buffer and same callback contract as the DMA path, so a
+ * trace of the two differs only in the interrupt load.
+ */
+static void stm32_dac_counter_callback(const struct device *counter_dev, void *user_data)
+{
+	ARG_UNUSED(counter_dev);
+
+	const struct device *codec_dev = (const struct device *)user_data;
+	const struct stm32_dac_cfg *dac_cfg = codec_dev->config;
+	struct stm32_dac_data *dac_data = codec_dev->data;
+	size_t samples = dac_data->config.dai_cfg.pcm.block_size / STM32_DAC_BYTES_PER_SAMPLE;
+
+	LL_DAC_ConvertData12LeftAligned(dac_cfg->dac_base, dac_cfg->dac_ll_channel,
+					dac_data->buf[dac_data->play_index]);
+	dac_data->play_index++;
+
+	if ((dac_data->play_index != samples) && (dac_data->play_index != 2U * samples)) {
+		return;
+	}
+
+	/* A half just finished playing: hand it back to the application. */
+	size_t done_index = 0;
+
+	if (dac_data->play_index == 2U * samples) {
+		done_index = samples;
+		dac_data->play_index = 0;
+	}
+
+	if (dac_data->writable) {
+		LOG_WRN_RATELIMIT("underrun: block not written in time, stale samples played");
+	}
+
+	dac_data->write_buf = &(dac_data->buf[done_index]);
+	dac_data->writable = true;
+
+	if (dac_data->tx_cb != NULL) {
+		dac_data->tx_cb(codec_dev, dac_data->tx_cb_user_data);
+	}
+}
+#endif /* CONFIG_AUDIO_DAC_STM32_DMA */
 
 static int stm32_dac_init(const struct device *dev)
 {
 	const struct stm32_dac_cfg *dac_cfg = dev->config;
 	struct stm32_dac_data *dac_data = dev->data;
 
+#ifdef CONFIG_AUDIO_DAC_STM32_DMA
 	if (!device_is_ready(dac_cfg->dma_dev)) {
 		LOG_ERR("init: DMA device %s not ready", dac_cfg->dma_dev->name);
 		return -ENODEV;
 	}
+#endif
 
 	if (!device_is_ready(dac_cfg->counter_dev)) {
 		LOG_ERR("init: counter device %s not ready", dac_cfg->counter_dev->name);
@@ -422,6 +510,15 @@ static DEVICE_API(audio_codec, stm32_dac_api) = {
 	.register_done_callback = stm32_dac_register_done_callback,
 };
 
+#ifdef CONFIG_AUDIO_DAC_STM32_DMA
+#define STM32_DAC_DMA_INIT(inst)                                                                   \
+	.dma_dev = DEVICE_DT_GET(DT_INST_DMAS_CTLR_BY_IDX(inst, 0)),                               \
+	.dma_channel = DT_INST_DMAS_CELL_BY_IDX(inst, 0, channel),                                 \
+	.dma_slot = STM32_DMA_SLOT_BY_IDX(inst, 0, slot),
+#else
+#define STM32_DAC_DMA_INIT(inst)
+#endif
+
 #define STM32_DAC_DEFINE(inst)                                                                     \
 	BUILD_ASSERT(STM32_DAC_TRIGGER(inst) != STM32_DAC_TRIGGER_UNSUPPORTED,                     \
 		     "Selected timer is not supported as a DAC trigger");                          \
@@ -431,9 +528,7 @@ static DEVICE_API(audio_codec, stm32_dac_api) = {
 		.dac_trigger = STM32_DAC_TRIGGER(inst),                                            \
 		.tim_base = (TIM_TypeDef *)DT_REG_ADDR(DT_INST_PHANDLE(inst, timer)),              \
 		.counter_dev = DEVICE_DT_GET(DT_CHILD(DT_INST_PHANDLE(inst, timer), counter)),     \
-		.dma_dev = DEVICE_DT_GET(DT_INST_DMAS_CTLR_BY_IDX(inst, 0)),                       \
-		.dma_channel = DT_INST_DMAS_CELL_BY_IDX(inst, 0, channel),                         \
-		.dma_slot = STM32_DMA_SLOT_BY_IDX(inst, 0, slot),                                  \
+		STM32_DAC_DMA_INIT(inst)                                                           \
 	};                                                                                         \
 	static struct stm32_dac_data stm32_dac_data_##inst;                                        \
 	DEVICE_DT_INST_DEFINE(inst, stm32_dac_init, NULL, &stm32_dac_data_##inst,                  \
