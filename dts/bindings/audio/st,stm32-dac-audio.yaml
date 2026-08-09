@@ -2,8 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 description: |
-  PCM audio playback on an STM32 DAC channel, streamed by DMA and clocked by a
-  basic timer's TRGO trigger.
+  PCM audio playback on an STM32 DAC channel, clocked by a basic timer and
+  streamed by DMA (or, with CONFIG_AUDIO_DAC_STM32_DMA=n, by a per-sample
+  timer interrupt).
 
   Example (STM32L1, DAC channel 1, TIM6, DMA1 ch2):
     audio_dac0: audio-dac {
@@ -36,4 +37,8 @@ properties:
       <zephyr/dt-bindings/dac/stm32-dac.h>. Must match the timer.
 
   dmas:
-    required: true
+    required: false
+    description: |
+      Channel used to stream samples to the DAC data register. Required
+      unless CONFIG_AUDIO_DAC_STM32_DMA is disabled, in which case it is
+      ignored.
