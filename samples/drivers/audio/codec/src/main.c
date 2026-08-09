@@ -114,27 +114,6 @@ int main(void)
 	audio_codec_stop(dev, AUDIO_DAI_DIR_TX);
 	LOG_INF("codec transfer stopped");
 
-	LOG_INF("codec loopback example");
-	loopback = true;
-	cfg.dai_cfg.pcm.dir = AUDIO_DAI_DIR_TXRX;
-	if (audio_codec_configure(dev, &cfg) < 0) {
-		LOG_ERR("configure codec error\n");
-		return -EIO;
-	}
-	if (audio_codec_register_done_callback(dev, tx_done, NULL, rx_done, NULL) < 0) {
-		LOG_ERR("could not register codec callbacks\n");
-		return -EIO;
-	}
-	audio_codec_start(dev, AUDIO_DAI_DIR_TXRX);
-	LOG_INF("loopback started");
-	if (audio_codec_set_property(dev, AUDIO_PROPERTY_OUTPUT_VOLUME, 0, val) < 0) {
-		LOG_ERR("could not set volume\n");
-		return -EIO;
-	}
-	k_sleep(K_MSEC(15000));
-	audio_codec_stop(dev, AUDIO_DAI_DIR_TXRX);
-	LOG_INF("loopback stopped");
-
 	LOG_INF("Exiting");
 	return 0;
 }
