@@ -36,6 +36,15 @@ properties:
       Timer TRGO source, from the STM32_DAC_TRIG_TIMx constants in
       <zephyr/dt-bindings/dac/stm32-dac.h>. Must match the timer.
 
+  trace-gpios:
+    type: phandle-array
+    required: false
+    description: |
+      Debug pin driven high while a callback runs, read only when
+      CONFIG_AUDIO_DAC_STM32_TRACE_GPIO is enabled. Written with a raw BSRR
+      store, so it is always driven active high and GPIO_ACTIVE_LOW is
+      rejected at build time.
+
   dmas:
     required: false
     description: |

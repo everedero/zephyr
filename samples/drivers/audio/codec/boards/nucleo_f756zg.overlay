@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <zephyr/dt-bindings/dac/stm32-dac.h>
+#include <zephyr/dt-bindings/gpio/gpio.h>
 
 &dac1 {
 	status = "okay";
@@ -33,6 +34,8 @@
 		io-channels = <&dac1 1>;
 		timer = <&timers6>;
 		trigger = <STM32_DAC_TRIG_TIM6>;
+		/* PF12 = Arduino D8, scope it with CONFIG_AUDIO_DAC_STM32_TRACE_GPIO=y */
+		trace-gpios = <&gpiof 12 GPIO_ACTIVE_HIGH>;
 		/* dmas = <&dma1 2 (STM32_DMA_PERIPH_TX | STM32_DMA_PRIORITY_HIGH)>; */
 		dmas = <&dma1 5 7
 			(STM32_DMA_PERIPH_TX | STM32_DMA_16BITS | STM32_DMA_PRIORITY_HIGH)

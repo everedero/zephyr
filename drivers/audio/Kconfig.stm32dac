@@ -23,6 +23,18 @@ config AUDIO_DAC_STM32_DMA
 	  every sample by hand: same audio, far more CPU, which makes the
 	  cost of DMA visible in a trace.
 
+config AUDIO_DAC_STM32_TRACE_GPIO
+	bool "Toggle a GPIO around the audio callbacks"
+	depends on AUDIO_DAC_STM32
+	select GPIO
+	help
+	  Drive the "trace-gpios" pin high on entry to the callback and low on
+	  exit, with a single BSRR store. On a scope the pin's duty cycle is the
+	  CPU cost of the callback: the same measurement the CTF markers make,
+	  but without touching the trace buffer or the interrupt being measured.
+
+	  The pin is driven active high, whatever the devicetree flags say.
+
 config AUDIO_DAC_STM32_MAX_BLOCK_SIZE
 	int "STM32 DAC audio maximum block size in bytes"
 	default 512

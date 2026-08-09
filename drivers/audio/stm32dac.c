@@ -21,12 +21,18 @@
 #include <zephyr/drivers/dma.h>
 #include <zephyr/drivers/dma/dma_stm32.h>
 #endif
+#ifdef CONFIG_AUDIO_DAC_STM32_TRACE_GPIO
+#include <zephyr/drivers/gpio.h>
+#endif
 #include <zephyr/audio/codec.h>
 #include <zephyr/tracing/tracing.h>
 
 #include <soc.h>
 #include <stm32_ll_dac.h>
 #include <stm32_ll_tim.h>
+#ifdef CONFIG_AUDIO_DAC_STM32_TRACE_GPIO
+#include <stm32_ll_gpio.h>
+#endif
 
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(stm32_dac, CONFIG_AUDIO_CODEC_LOG_LEVEL);
@@ -73,7 +79,21 @@ struct stm32_dac_cfg {
 	uint32_t dma_channel;
 	uint32_t dma_slot;
 #endif
+#ifdef CONFIG_AUDIO_DAC_STM32_TRACE_GPIO
+	/* Zephyr spec for the one-time setup, raw port/mask for the hot path. */
+	struct gpio_dt_spec trace_gpio;
+	GPIO_TypeDef *trace_port;
+	uint32_t trace_mask;
+#endif
 };
+
+#ifdef CONFIG_AUDIO_DAC_STM32_TRACE_GPIO
+#define STM32_DAC_TRACE_HIGH(cfg) LL_GPIO_SetOutputPin((cfg)->trace_port, (cfg)->trace_mask)
+#define STM32_DAC_TRACE_LOW(cfg)  LL_GPIO_ResetOutputPin((cfg)->trace_port, (cfg)->trace_mask)
+#else
+#define STM32_DAC_TRACE_HIGH(cfg) ((void)(cfg))
+#define STM32_DAC_TRACE_LOW(cfg)  ((void)(cfg))
+#endif
 
 struct stm32_dac_data {
 	struct audio_codec_cfg config;
@@ -407,11 +427,15 @@ static void stm32_dac_dma_callback(const struct device *dev, void *user_data, ui
 				   int status)
 {
 	const struct device *codec_dev = (const struct device *)user_data;
+	const struct stm32_dac_cfg *dac_cfg = codec_dev->config;
 	struct stm32_dac_data *dac_data = codec_dev->data;
+
+	STM32_DAC_TRACE_HIGH(dac_cfg);
 
 	if (status < 0) {
 		LOG_ERR("dma ch %" PRIu32 " error (%d), stopping output", channel, status);
 		stm32_dac_stop_output(codec_dev);
+		STM32_DAC_TRACE_LOW(dac_cfg);
 		return;
 	}
 
@@ -438,6 +462,8 @@ static void stm32_dac_dma_callback(const struct device *dev, void *user_data, ui
 	if (dac_data->tx_cb != NULL) {
 		dac_data->tx_cb(codec_dev, dac_data->tx_cb_user_data);
 	}
+
+	STM32_DAC_TRACE_LOW(dac_cfg);
 }
 #else
 /*
@@ -454,11 +480,14 @@ static void stm32_dac_counter_callback(const struct device *counter_dev, void *u
 	struct stm32_dac_data *dac_data = codec_dev->data;
 	size_t samples = dac_data->config.dai_cfg.pcm.block_size / STM32_DAC_BYTES_PER_SAMPLE;
 
+	STM32_DAC_TRACE_HIGH(dac_cfg);
+
 	LL_DAC_ConvertData12LeftAligned(dac_cfg->dac_base, dac_cfg->dac_ll_channel,
 					dac_data->buf[dac_data->play_index]);
 	dac_data->play_index++;
 
 	if ((dac_data->play_index != samples) && (dac_data->play_index != 2U * samples)) {
+		STM32_DAC_TRACE_LOW(dac_cfg);
 		return;
 	}
 
@@ -486,6 +515,8 @@ static void stm32_dac_counter_callback(const struct device *counter_dev, void *u
 	if (dac_data->tx_cb != NULL) {
 		dac_data->tx_cb(codec_dev, dac_data->tx_cb_user_data);
 	}
+
+	STM32_DAC_TRACE_LOW(dac_cfg);
 }
 #endif /* CONFIG_AUDIO_DAC_STM32_DMA */
 
@@ -505,6 +536,18 @@ static int stm32_dac_init(const struct device *dev)
 		LOG_ERR("init: counter device %s not ready", dac_cfg->counter_dev->name);
 		return -ENODEV;
 	}
+
+#ifdef CONFIG_AUDIO_DAC_STM32_TRACE_GPIO
+	/* Only place the GPIO driver is used: it turns the port's clock on for
+	 * good, so the raw BSRR stores in the callbacks are safe afterwards.
+	 */
+	int ret = gpio_pin_configure_dt(&dac_cfg->trace_gpio, GPIO_OUTPUT_INACTIVE);
+
+	if (ret < 0) {
+		LOG_ERR("init: trace gpio configure failed (%d)", ret);
+		return ret;
+	}
+#endif
 
 	memset(dac_data, 0, sizeof(*dac_data));
 	return 0;
@@ -531,9 +574,28 @@ static DEVICE_API(audio_codec, stm32_dac_api) = {
 #define STM32_DAC_DMA_INIT(inst)
 #endif
 
+#ifdef CONFIG_AUDIO_DAC_STM32_TRACE_GPIO
+/* DT_GPIO_CTLR has no _OR variant, so the whole block is conditional. */
+#define STM32_DAC_TRACE_GPIO_INIT(inst)                                                            \
+	IF_ENABLED(DT_INST_NODE_HAS_PROP(inst, trace_gpios),                                       \
+		   (.trace_gpio = GPIO_DT_SPEC_INST_GET(inst, trace_gpios),                        \
+		    .trace_port = (GPIO_TypeDef *)DT_REG_ADDR(                                     \
+			    DT_GPIO_CTLR(DT_DRV_INST(inst), trace_gpios)),                         \
+		    .trace_mask = BIT(DT_INST_GPIO_PIN(inst, trace_gpios)),))
+/* The hot path writes BSRR directly and cannot honour a polarity flag. */
+#define STM32_DAC_TRACE_GPIO_ASSERT(inst)                                                          \
+	IF_ENABLED(DT_INST_NODE_HAS_PROP(inst, trace_gpios),                                       \
+		   (BUILD_ASSERT((DT_INST_GPIO_FLAGS(inst, trace_gpios) & GPIO_ACTIVE_LOW) == 0,   \
+				 "trace-gpios must be GPIO_ACTIVE_HIGH");))
+#else
+#define STM32_DAC_TRACE_GPIO_INIT(inst)
+#define STM32_DAC_TRACE_GPIO_ASSERT(inst)
+#endif
+
 #define STM32_DAC_DEFINE(inst)                                                                     \
 	BUILD_ASSERT(STM32_DAC_TRIGGER(inst) != STM32_DAC_TRIGGER_UNSUPPORTED,                     \
 		     "Selected timer is not supported as a DAC trigger");                          \
+	STM32_DAC_TRACE_GPIO_ASSERT(inst)                                                          \
 	static const struct stm32_dac_cfg stm32_dac_cfg_##inst = {                                 \
 		.dac_base = (DAC_TypeDef *)DT_REG_ADDR(DT_INST_IO_CHANNELS_CTLR_BY_IDX(inst, 0)),  \
 		.dac_ll_channel = UTIL_CAT(LL_DAC_CHANNEL_, DT_INST_IO_CHANNELS_OUTPUT(inst)),     \
@@ -541,6 +603,7 @@ static DEVICE_API(audio_codec, stm32_dac_api) = {
 		.tim_base = (TIM_TypeDef *)DT_REG_ADDR(DT_INST_PHANDLE(inst, timer)),              \
 		.counter_dev = DEVICE_DT_GET(DT_CHILD(DT_INST_PHANDLE(inst, timer), counter)),     \
 		STM32_DAC_DMA_INIT(inst)                                                           \
+		STM32_DAC_TRACE_GPIO_INIT(inst)                                                    \
 	};                                                                                         \
 	static struct stm32_dac_data stm32_dac_data_##inst;                                        \
 	DEVICE_DT_INST_DEFINE(inst, stm32_dac_init, NULL, &stm32_dac_data_##inst,                  \
