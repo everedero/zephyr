@@ -1,0 +1,44 @@
+/*
+ * Copyright (c) 2026 Draeger
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+#include <zephyr/dt-bindings/dac/stm32-dac.h>
+#include <zephyr/dt-bindings/gpio/gpio.h>
+
+&dac1 {
+	status = "okay";
+	pinctrl-0 = <&dac_out1_pa4>;
+	pinctrl-names = "default";
+};
+
+&timers6 {
+	status = "okay";
+
+	counter {
+		status = "okay";
+	};
+};
+
+&dma1 {
+	status = "okay";
+};
+
+/ {
+	aliases {
+		codec0 = &audio_dac0;
+	};
+
+	audio_dac0: audio-dac {
+		compatible = "st,stm32-dac-audio";
+		io-channels = <&dac1 1>;
+		timer = <&timers6>;
+		trigger = <STM32_DAC_TRIG_TIM6>;
+		/* PF12 = Arduino D8, scope it with CONFIG_AUDIO_DAC_STM32_TRACE_GPIO=y */
+		trace-gpios = <&gpiof 12 GPIO_ACTIVE_HIGH>;
+		/* dmas = <&dma1 2 (STM32_DMA_PERIPH_TX | STM32_DMA_PRIORITY_HIGH)>; */
+		dmas = <&dma1 5 7
+			(STM32_DMA_PERIPH_TX | STM32_DMA_16BITS | STM32_DMA_PRIORITY_HIGH)
+			0>;
+	};
+};

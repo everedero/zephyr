@@ -1,0 +1,17 @@
+sample:
+  description: TX-only audio codec tone sample with a rate/width capability sweep
+  name: audio codec tone sample
+tests:
+  sample.drivers.audio.codec_tone:
+    filter: dt_alias_exists("codec0")
+    tags: codec
+    integration_platforms:
+      - nucleo_f756zg
+    harness: console
+    harness_config:
+      type: multi_line
+      ordered: true
+      regex:
+        - "Audio codec tone sample"
+        - "probing codec capabilities"
+        - "Exiting"

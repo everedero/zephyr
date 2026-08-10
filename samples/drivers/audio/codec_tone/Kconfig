@@ -1,0 +1,28 @@
+# Copyright (c) 2026 Draeger
+# SPDX-License-Identifier: Apache-2.0
+
+mainmenu "Audio codec tone sample"
+
+config SAMPLE_TONE_FREQ_HZ
+	int "Test tone frequency in Hz"
+	default 440
+	range 1 100000
+	help
+	  Played at every sample rate the codec accepts. Rates below twice this
+	  value cannot reproduce it and are reported as aliasing.
+
+config SAMPLE_BLOCK_SIZE
+	int "Bytes per audio block"
+	default 320
+	range 2 32766
+	help
+	  Must not exceed whatever maximum the codec driver enforces, or every
+	  probe fails. For the STM32 DAC that is
+	  CONFIG_AUDIO_DAC_STM32_MAX_BLOCK_SIZE.
+
+config SAMPLE_STEP_MS
+	int "Milliseconds to play each rate/width combination"
+	default 2000
+	range 100 60000
+
+source "Kconfig.zephyr"
