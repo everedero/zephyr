@@ -431,6 +431,8 @@ static void stm32_dac_dma_callback(const struct device *dev, void *user_data, ui
 	struct stm32_dac_data *dac_data = codec_dev->data;
 
 	STM32_DAC_TRACE_HIGH(dac_cfg);
+	/* Custom trace event */
+	sys_trace_named_event("dac_dma_cb", channel, (uint32_t)status);
 
 	if (status < 0) {
 		LOG_ERR("dma ch %" PRIu32 " error (%d), stopping output", channel, status);
@@ -438,11 +440,6 @@ static void stm32_dac_dma_callback(const struct device *dev, void *user_data, ui
 		STM32_DAC_TRACE_LOW(dac_cfg);
 		return;
 	}
-
-	/* isr_enter carries no vector number: name ourselves so the callback is
-	 * tellable from systick in the trace.
-	 */
-	sys_trace_named_event("dac_dma_cb", channel, (uint32_t)status);
 
 	if (dac_data->writable) {
 		LOG_WRN_RATELIMIT("underrun: block not written in time, stale samples played");
@@ -481,6 +478,9 @@ static void stm32_dac_counter_callback(const struct device *counter_dev, void *u
 	size_t samples = dac_data->config.dai_cfg.pcm.block_size / STM32_DAC_BYTES_PER_SAMPLE;
 
 	STM32_DAC_TRACE_HIGH(dac_cfg);
+	/* Custom trace event */
+	sys_trace_named_event("dac_isr_cb", (uint32_t)done_index, 0);
+
 
 	LL_DAC_ConvertData12LeftAligned(dac_cfg->dac_base, dac_cfg->dac_ll_channel,
 					dac_data->buf[dac_data->play_index]);
@@ -498,12 +498,6 @@ static void stm32_dac_counter_callback(const struct device *counter_dev, void *u
 		done_index = samples;
 		dac_data->play_index = 0;
 	}
-
-	/* Only on the half-block boundary, at the same rate as the DMA path: a
-	 * marker per sample would fill the RAM trace buffer in a fraction of a
-	 * second.
-	 */
-	sys_trace_named_event("dac_isr_cb", (uint32_t)done_index, 0);
 
 	if (dac_data->writable) {
 		LOG_WRN_RATELIMIT("underrun: block not written in time, stale samples played");
