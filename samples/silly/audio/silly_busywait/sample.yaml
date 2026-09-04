@@ -1,0 +1,17 @@
+sample:
+  name: silly audio (k_busy_wait)
+  description: Silly attempt at 48 kHz audio using the Zephyr standard DAC
+    driver, pacing each sample with k_busy_wait(20). Emits a custom trace
+    event at every sample iteration. Compare achieved sample rate against the
+    k_sleep variant.
+common:
+  tags: dac tracing
+  harness: console
+  harness_config:
+    type: multi_line
+    regex:
+      - "silly"
+tests:
+  sample.silly.audio.busywait:
+    platform_allow: nucleo_f756zg
+    depends_on: dac

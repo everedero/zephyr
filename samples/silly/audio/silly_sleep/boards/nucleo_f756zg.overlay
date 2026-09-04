@@ -1,0 +1,17 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/ {
+	zephyr,user {
+		dac = <&dac1>;
+		dac-channel-id = <1>;
+		dac-resolution = <12>;
+	};
+};
+
+&dac1 {
+	pinctrl-0 = <&dac_out1_pa4>;
+	pinctrl-names = "default";
+	status = "okay";
+};
