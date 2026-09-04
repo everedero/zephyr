@@ -34,6 +34,7 @@ def add_metadata(name, pid, tid, args):
     }
 
 g_thread_names = {}
+g_buf_names = {}
 active_buffers = {}
 g_events = []
 g_isr_active = False
@@ -48,6 +49,11 @@ def spit_json(path, trace_events):
     trace_events.append(add_metadata("thread_name", 0, 5, {'name': 'Net'}))
     trace_events.append(add_metadata("thread_name", 0, 6, {'name': 'Socket'}))
     trace_events.append(add_metadata("thread_name", 0, 7, {'name': 'Custom'}))
+
+    for k in g_buf_names.keys():
+        # TODO: group buffers in one PID per pool
+        name = g_buf_names[k]['name']
+        trace_events.append(add_metadata("thread_name", 1, int(k), {'name': f'NetBuf {name}'}))
 
     for k in g_thread_names.keys():
         trace_events.append(add_metadata("thread_name", 0, int(k), {'name': g_thread_names[k]['name']}))
@@ -117,7 +123,10 @@ def handle_thread_event(event, timestamp):
                                              'thread_suspend']):
         ph = 'E'
     else:
-        raise Exception(f'THREAD OTHER: {event.name}')
+        # thread_sched_lock/unlock/pend/ready/... : no thread_id payload,
+        # just drop them on the 'general' track as instant events.
+        g_events.append(format_json(event.name, timestamp, 'i', 0))
+        return
 
     tid = event.payload_field['thread_id']
 
@@ -177,6 +186,82 @@ def handle_gpio_event(event, timestamp):
             args[key] = int(val)
     g_events.append(format_json(status, timestamp, ph, tid, None,
                                 args=args))
+
+def handle_buf_lifetime(event, timestamp):
+    tid = NET_BUF_TID
+    buf = event.payload_field['buf']
+    poolname = event.payload_field['name']
+    pool = event.payload_field['pool']
+
+    if buf == 0:
+        ph = 'i'
+        free = event.payload_field['free']
+        meta = {'pool_name': str(poolname), 'pool_addr': f'{hex(pool)}'}
+        g_events.append(format_json(f"net_buf_alloc_failed", timestamp, ph, tid, meta))
+
+    else:
+        # Record pool free count
+        ph = 'C'
+        free = event.payload_field['free']
+        meta = {f'{poolname} ({hex(pool)})': int(free)}
+        g_events.append(format_json(f"free bufs", timestamp, ph, tid, meta, 1))
+
+        # Record buffer lifetime as duration event
+        if 'allocated' in event.name:
+            ph = 'B'
+            if buf in active_buffers.keys():
+                raise Exception(f"Missing destroy for buf {hex(buf)}")
+            # Store one ref. There is always one implicit ref when allocating a buffer.
+            active_buffers[buf] = 1
+        else:
+            ph = 'E'
+            if buf not in active_buffers.keys():
+                raise Exception(f"Missing alloc for buf {hex(buf)}")
+            del active_buffers[buf]
+
+        meta = {'pool_name': str(poolname), 'pool_addr': f'{hex(pool)}'}
+        g_events.append(format_json(f"buf [{hex(buf)}] in use", timestamp, ph, buf, meta, 1))
+
+def handle_buf_event(event, timestamp):
+    name = event.name
+    tid = NET_BUF_TID
+
+    if 'net_buf_allocated' in name or 'net_buf_destroyed' in name:
+        handle_buf_lifetime(event, timestamp)
+
+    elif 'net_buf_alloc' in name:
+        ph = 'i'
+        poolname = event.payload_field['name']
+        pool = event.payload_field['pool']
+        free = event.payload_field['free']
+        meta = {'name': str(poolname), 'pool': f'{hex(pool)}', 'count': int(free)}
+        g_events.append(format_json(name, timestamp, ph, tid, meta))
+
+    elif 'ref' in name:
+        buf = event.payload_field['buf']
+        cnt = event.payload_field['count']
+        tid = buf
+
+        # TODO: keep track of origin pool and mention it in the name
+
+        if tid not in g_buf_names.keys():
+            g_buf_names[tid] = {'name': hex(buf), 'active': 0}
+
+        if buf not in active_buffers.keys():
+            raise Exception(f"Refcounting a buf that hasn't been allocated: {hex(buf)}")
+
+        if 'unref' in name:
+            ph = 'E'
+            active_buffers[buf] -= 1
+        else:
+            ph = 'B'
+            active_buffers[buf] += 1
+
+        if cnt != active_buffers[buf]:
+            print(f"Something doesn't add up: {hex(buf)}")
+
+        # This will show up on the same thread as the "buf xx in use" event
+        g_events.append(format_json(f"ref", timestamp, f"p22:30h", tid, None, 1))
 
 def handle_semaphore_event(event, timestamp):
     if any(match in event.name for match in ['take_blocking', "take_enter",
@@ -314,6 +399,10 @@ def main():
             handle_gpio_event(event, timestamp)
             return
 
+        elif 'net_buf' in name:
+            handle_buf_event(event, timestamp)
+            return
+
         elif 'net' in name:
             tid = 5
 
@@ -321,9 +410,9 @@ def main():
             tid = 6
 
         else:
-            print("Unknown event")
-            tid = 7
-            #raise Exception(f'Unknown event: {event.name} payload {event.payload_field}')
+            # Unclassified event (sys_init_*, k_sleep_*, ...): show it on the
+            # 'general' track instead of aborting the whole conversion.
+            meta = {k: str(v) for k, v in event.payload_field.items()} or None
 
         # FIXME: move this next to the generated events
         g_events.append(format_json(name, timestamp, ph, tid, meta))
