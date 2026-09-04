@@ -31,15 +31,17 @@ void sys_trace_idle_exit(void);
 #define sys_trace_sys_init_exit(entry, level, result)
 
 /*
- * Define a custom trace hook for the "silly" audio demonstrations. A tracing
- * backend can override it, or it can be used to hook into custom tools. The
- * trailing #ifndef in tracing_hooks.h ensures our definition wins.
+ * The CONFIG_TRACING_CUSTOM branch of tracing.h does not define the
+ * sys_trace_named_event() API (the default branch does, as a no-op). Define it
+ * here as a no-op that a tracing backend can later override. Used by the
+ * "silly" audio demonstrations to emit a named event per DAC sample.
  */
-#ifndef sys_port_trace_silly_audio_sample
-#define sys_port_trace_silly_audio_sample(sample_index, value) \
+#ifndef sys_trace_named_event
+#define sys_trace_named_event(name, arg0, arg1) \
 	do { \
-		(void)(sample_index); \
-		(void)(value); \
+		(void)(name); \
+		(void)(arg0); \
+		(void)(arg1); \
 	} while (0)
 #endif
 

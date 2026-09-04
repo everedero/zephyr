@@ -71,7 +71,7 @@ int main(void)
 		}
 
 		/* Custom trace event at every loop iteration. */
-		sys_port_trace_silly_audio_sample(sample_index, value);
+		sys_trace_named_event("sample", sample_index, value);
 
 		k_busy_wait(SAMPLE_PERIOD_USEC);
 
