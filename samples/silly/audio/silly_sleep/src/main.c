@@ -59,7 +59,7 @@ int main(void)
 			return 0;
 		}
 
-		sys_trace_named_event("sample", sample_index, 0);
+//		sys_trace_named_event("sample", sample_index, 0);
 		k_sleep(K_USEC(SAMPLE_PERIOD_USEC));
 
 		sample_index++;
