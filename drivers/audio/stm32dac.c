@@ -479,7 +479,7 @@ static void stm32_dac_counter_callback(const struct device *counter_dev, void *u
 
 	STM32_DAC_TRACE_HIGH(dac_cfg);
 	/* Custom trace event */
-	sys_trace_named_event("dac_isr_cb", (uint32_t)done_index, 0);
+	// sys_trace_named_event("dac_isr_cb", (uint32_t)done_index, 0);
 
 
 	LL_DAC_ConvertData12LeftAligned(dac_cfg->dac_base, dac_cfg->dac_ll_channel,
