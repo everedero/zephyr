@@ -1,0 +1,13 @@
+sample:
+  name: USB Audio 2 DAC sample
+tests:
+  sample.usb.uac2_dac:
+    depends_on:
+      - usbd
+      - dac
+    tags:
+      - usb
+      - dac
+    platform_allow:
+      - nucleo_f756zg
+    harness: TBD
