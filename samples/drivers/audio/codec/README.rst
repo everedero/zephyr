@@ -8,6 +8,10 @@ Overview
 
 A simple sample that to demo audio speaker play, and mic to speaker loopback functions.
 
+It plays a 440 Hz sine wave tone with 16-bit width and 16 kSPS rate. 440 Hz is
+the reference pitch of the A4 note, so the tone can be checked against a guitar
+tuner or a tuning fork.
+
 Building and Running
 ********************
 
