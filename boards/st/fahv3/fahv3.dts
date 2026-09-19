@@ -38,11 +38,20 @@
 			gpios = <&gpiod 1 GPIO_ACTIVE_LOW>;
 			label = "Dbg LD2";
 		};
+	};
 
-		displ_reset: rst_1 {
-			gpios = <&gpioe 10 GPIO_ACTIVE_LOW>;
-			label = "Display nRST";
-		};
+	backlight: backlight {
+		compatible = "regulator-fixed";
+		regulator-name = "display-backlight";
+		enable-gpios = <&gpioe 9 GPIO_ACTIVE_HIGH>;
+		regulator-boot-on;
+	};
+
+	lcd_enable: lcd_enable {
+		compatible = "regulator-fixed";
+		regulator-name = "lcd-enable";
+		enable-gpios = <&gpioe 10 GPIO_ACTIVE_LOW>;
+		regulator-boot-on;
 	};
 
 	gpio_keys {
@@ -244,7 +253,7 @@ sdcard: &sdmmc2 {
 
 &timers1 {
 	st,prescaler = <10000>;
-	status = "okay";
+	status = "disabled";
 
 	pwm_screen: pwm {
 		status = "okay";

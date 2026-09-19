@@ -15,3 +15,6 @@ CONFIG_UART_CONSOLE=y
 
 # Enable GPIO
 CONFIG_GPIO=y
+
+# Enable display backlight and LCD power regulators
+CONFIG_REGULATOR=y
