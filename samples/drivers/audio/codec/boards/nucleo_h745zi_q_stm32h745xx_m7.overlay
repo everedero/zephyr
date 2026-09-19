@@ -1,0 +1,43 @@
+/*
+ * Copyright (c) 2026 Draeger
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+#include <zephyr/dt-bindings/dac/stm32-dac.h>
+#include <zephyr/dt-bindings/dma/stm32_dma.h>
+
+&dac1 {
+	status = "okay";
+	pinctrl-0 = <&dac1_out1_pa4>;
+	pinctrl-names = "default";
+};
+
+&timers6 {
+	status = "okay";
+
+	counter {
+		status = "okay";
+	};
+};
+
+&dmamux1 {
+	status = "okay";
+};
+
+&dma1 {
+	status = "okay";
+};
+
+/ {
+	aliases {
+		codec0 = &audio_dac0;
+	};
+
+	audio_dac0: audio-dac {
+		compatible = "st,stm32-dac-audio";
+		io-channels = <&dac1 1>;
+		timer = <&timers6>;
+		trigger = <STM32_DAC_TRIG_TIM6>;
+		dmas = <&dma1 2 67 (STM32_DMA_PERIPH_TX | STM32_DMA_PRIORITY_HIGH) 0>;
+	};
+};
