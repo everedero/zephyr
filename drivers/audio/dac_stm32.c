@@ -11,6 +11,7 @@
 #include <string.h>
 
 #include <zephyr/audio/codec.h>
+#include <zephyr/cache.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/counter.h>
 #include <zephyr/drivers/dac.h>
@@ -307,6 +308,8 @@ static int dac_stm32_write(const struct device *dev, uint8_t *data, size_t data_
 		LOG_DBG("write: %zu samples, %zu padded with silence", src_samples,
 			dst_samples - src_samples);
 	}
+
+	sys_cache_data_flush_range(dst, dst_samples * sizeof(*dst));
 
 	dev_data->writable = false;
 
