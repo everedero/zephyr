@@ -262,9 +262,13 @@ sdcard: &sdmmc2 {
 	};
 };
 
-zephyr_udc0: &usbotg_fs {
+zephyr_udc0: &usbotg_hs {
 	pinctrl-0 = <&usb_otg_hs_dm_pb14 &usb_otg_hs_dp_pb15>;
 	pinctrl-names = "default";
+	status = "okay";
+};
+
+&usbphyc {
 	status = "okay";
 };
 
