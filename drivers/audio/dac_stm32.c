@@ -148,7 +148,7 @@ static void dac_stm32_start_output(const struct device *dev)
 	const struct dac_stm32_cfg *dev_cfg = dev->config;
 	struct dac_stm32_data *dev_data = dev->data;
 
-	if (!dev_data->config.dai_type != AUDIO_DAI_TYPE_PCM) {
+	if (dev_data->config.dai_type != AUDIO_DAI_TYPE_PCM) {
 		LOG_ERR("start: not configured");
 		return;
 	}
