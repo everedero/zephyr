@@ -6,7 +6,7 @@
  */
 
 /dts-v1/;
-#include <st/f7/stm32f730.dtsi>
+#include <st/f7/stm32f730X8.dtsi>
 #include <st/f7/stm32f730z8tx-pinctrl.dtsi>
 #include "arduino_r3_connector.dtsi"
 #include <zephyr/dt-bindings/input/input-event-codes.h>
@@ -212,7 +212,33 @@ sdcard: &sdmmc2 {
 		status = "okay";
 		spi-bus-width = <4>;
 		writeoc = "PP_1_1_4";
-                jedec-id = [1f 86 01];
+		jedec-id = [1f 86 01];
+
+		partitions {
+			compatible = "fixed-partitions";
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			slot0_partition: partition@0 {
+				label = "image-0";
+				reg = <0x00000000 DT_SIZE_K(640)>;
+			};
+
+			slot1_partition: partition@a0000 {
+				label = "image-1";
+				reg = <0x000a0000 DT_SIZE_K(640)>;
+			};
+
+			storage_partition: partition@140000 {
+				label = "storage";
+				reg = <0x00140000 DT_SIZE_K(704)>;
+			};
+
+			scratch_partition: partition@1f0000 {
+				label = "image-scratch";
+				reg = <0x001f0000 DT_SIZE_K(64)>;
+			};
+		};
 	};
 };
 
@@ -266,35 +292,10 @@ zephyr_udc0: &usbotg_fs {
 		#address-cells = <1>;
 		#size-cells = <1>;
 
-		/* sectors 0-3 */
 		boot_partition: partition@0 {
 			label = "mcuboot";
 			reg = <0x00000000 DT_SIZE_K(64)>;
 			read-only;
-		};
-
-		/* sector 4 */
-		storage_partition: partition@10000 {
-			label = "storage";
-			reg = <0x00010000 DT_SIZE_K(64)>;
-		};
-
-		/* sector 5 */
-		slot0_partition: partition@20000 {
-			label = "image-0";
-			reg = <0x00020000 DT_SIZE_K(128)>;
-		};
-
-		/* sector 6 */
-		slot1_partition: partition@40000 {
-			label = "image-1";
-			reg = <0x00040000 DT_SIZE_K(128)>;
-		};
-
-		/* sector 7 */
-		scratch_partition: partition@60000 {
-			label = "image-scratch";
-			reg = <0x00060000 DT_SIZE_K(128)>;
 		};
 	};
 };
