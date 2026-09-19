@@ -1,0 +1,33 @@
+/*
+ * Copyright (c) 2024 Eve Redero
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/*
+ * Drive display backlight (TIM1 CH1, PE9) via a fixed regulator so it
+ * is enabled automatically at boot without application code.
+ * Disable timers1 to release PE9 from TIM1_CH1 alternate function.
+ *
+ * Drive nEN_LCD (PE10, active-low) low at boot to enable the LCD driver.
+ */
+
+/ {
+	backlight: backlight {
+		compatible = "regulator-fixed";
+		regulator-name = "display-backlight";
+		enable-gpios = <&gpioe 9 GPIO_ACTIVE_HIGH>;
+		regulator-boot-on;
+	};
+
+	lcd_enable: lcd_enable {
+		compatible = "regulator-fixed";
+		regulator-name = "lcd-enable";
+		enable-gpios = <&gpioe 10 GPIO_ACTIVE_LOW>;
+		regulator-boot-on;
+	};
+};
+
+&timers1 {
+	status = "disabled";
+};
