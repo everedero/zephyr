@@ -48,9 +48,9 @@ int main(void)
 	sample_index = 0;
 
 	while (1) {
-		uint16_t value =
-			wave_table[sample_index % ARRAY_SIZE(wave_table)];
-
+			uint16_t value =
+				((wave_table[sample_index % ARRAY_SIZE(wave_table)] << 0) +
+				(wave_table[(sample_index + 1) % ARRAY_SIZE(wave_table)] << 8)) >> 4;
 		ret = dac_write_value(dac_dev, DAC_CHANNEL_ID, value);
 		if (ret != 0) {
 			return 0;
@@ -61,6 +61,7 @@ int main(void)
 
 		k_busy_wait(SAMPLE_PERIOD_USEC);
 
+		sample_index++;
 		sample_index++;
 	}
 

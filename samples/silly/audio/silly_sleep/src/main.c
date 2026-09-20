@@ -50,9 +50,9 @@ int main(void)
 	while (1) {
 		/* Custom trace event at every loop iteration. */
 		sys_trace_named_event("sample", sample_index, 1);
-
 		uint16_t value =
-			wave_table[sample_index % ARRAY_SIZE(wave_table)];
+			((wave_table[sample_index % ARRAY_SIZE(wave_table)] << 0) +
+			(wave_table[(sample_index + 1) % ARRAY_SIZE(wave_table)] << 8)) >> 4;
 
 		ret = dac_write_value(dac_dev, DAC_CHANNEL_ID, value);
 		if (ret != 0) {
@@ -62,6 +62,7 @@ int main(void)
 //		sys_trace_named_event("sample", sample_index, 0);
 		k_sleep(K_USEC(SAMPLE_PERIOD_USEC));
 
+		sample_index++;
 		sample_index++;
 	}
 
