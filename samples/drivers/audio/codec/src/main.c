@@ -90,7 +90,14 @@ int main(void)
 		LOG_ERR("could not set volume\n");
 		return -EIO;
 	}
-	k_sleep(K_MSEC(15000));
+	k_sleep(K_MSEC(6000));
+#if 1
+	int i = 0;
+	for (i=0; i < 0xFFFF; i++) {
+		printk(".");
+	}
+#endif
+
 	audio_codec_stop(dev, AUDIO_DAI_DIR_TX);
 	LOG_INF("codec transfer stopped");
 
