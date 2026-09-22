@@ -12,6 +12,7 @@
 #include <zephyr/drivers/counter.h>
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/timer/system_timer_lpm.h>
+#include <zephyr/tracing/tracing.h>
 
 #define COUNTER_MAX 0x00ffffff
 #define TIMER_STOPPED 0xff000000
@@ -261,6 +262,9 @@ __attribute__((interrupt("IRQ"))) void sys_clock_isr(void)
 #ifdef CONFIG_TRACING_ISR
 	sys_trace_isr_enter();
 #endif /* CONFIG_TRACING_ISR */
+
+	/* Custom trace event for systick */
+	sys_trace_named_event("systick_event", cycle_count, overflow_cyc);
 
 	uint32_t dcycles;
 	uint32_t dticks;
