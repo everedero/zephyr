@@ -11,6 +11,7 @@
 #include <zephyr/audio/codec.h>
 #include <zephyr/logging/log.h>
 #include "sine.h"
+#include <zephyr/tracing/tracing.h>
 LOG_MODULE_REGISTER(codec_sample);
 
 #define AUDIO_BLOCK_SIZE 218
@@ -34,6 +35,7 @@ static void tx_done(const struct device *dev, void *user_data)
 		if (remaining < AUDIO_BLOCK_SIZE) {
 			audio_data_p = wave_table;
 		}
+		sys_trace_named_event("refill", 0, 0);
 		audio_codec_write(dev, audio_data_p, AUDIO_BLOCK_SIZE);
 		audio_data_p += AUDIO_BLOCK_SIZE;
 	}
