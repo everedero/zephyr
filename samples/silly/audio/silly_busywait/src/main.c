@@ -58,8 +58,9 @@ int main(void)
 
 		/* Custom trace event at every loop iteration. */
 		sys_trace_named_event("sample", sample_index, value);
-
+#ifndef CONFIG_NO_WAIT
 		k_busy_wait(SAMPLE_PERIOD_USEC);
+#endif
 
 		sample_index++;
 		sample_index++;

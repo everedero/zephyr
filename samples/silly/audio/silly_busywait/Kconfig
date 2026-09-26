@@ -1,0 +1,6 @@
+mainmenu "Silly busywait sound play"
+
+config NO_WAIT
+        bool "Do not busywait"
+
+source "Kconfig.zephyr"
