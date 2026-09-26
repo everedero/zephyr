@@ -11,7 +11,7 @@ import sys
 # Parameters
 FREQUENCY = 440  # Hz (A4 note)
 SAMPLE_RATE = 48000  # Hz
-BIT_DEPTH = 16  # bits (will be converted to 12-bit by shifting >> 4)
+BIT_DEPTH = 12  # bits (will be converted to 12-bit by shifting >> 4)
 
 # Calculate the number of samples for one complete period
 # We want an exact number of samples to make a seamless loop
@@ -34,8 +34,7 @@ for i in range(samples_per_period):
     phase = 2.0 * math.pi * i / samples_per_period
     sine_value = math.sin(phase)
     
-    # Scale to 16-bit unsigned range (0 to 65535)
-    # Center at 32768 (0x8000)
+    # Scale
     sample_value = int(mid_value + (sine_value * mid_value))
     
     # Clamp to valid range
