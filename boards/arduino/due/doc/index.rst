@@ -13,6 +13,8 @@ SAM3X8E ARM Cortex-M3 CPU and the following devices:
 
 * Serial Port over USB (ATMEL_SAM3)
 
+* USB High Speed Device Controller (UOTGHS)
+
 More information about the board can be found at the `Arduino Due website`_.
 The `Atmel SAM3X8E Datasheet`_ has the information and the datasheet about
 the processor.

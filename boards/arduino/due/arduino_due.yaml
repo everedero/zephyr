@@ -12,5 +12,6 @@ supported:
   - arduino_i2c
   - dac
   - gpio
+  - usbd
   - watchdog
 vendor: arduino
