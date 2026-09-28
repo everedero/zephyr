@@ -89,3 +89,7 @@
 };
 
 arduino_i2c: &twi1 {};
+
+zephyr_udc0: &usbhs {
+	status = "okay";
+};

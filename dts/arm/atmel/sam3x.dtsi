@@ -305,6 +305,20 @@
 			alarms-count = <1>;
 			status = "disabled";
 		};
+
+		usbhs: usbd@400ac000 {
+			compatible = "atmel,sam-usbhs";
+			reg = <0x400ac000 0x4000>, <0x20180000 0x48000>;
+			reg-names = "core", "fifo";
+			interrupts = <40 0>;
+			interrupt-names = "usbhs";
+			maximum-speed = "full-speed";
+			num-bidir-endpoints = <1>;
+			num-in-endpoints = <5>;
+			num-out-endpoints = <5>;
+			clocks = <&pmc PMC_TYPE_PERIPHERAL 40>;
+			status = "disabled";
+		};
 	};
 };
 

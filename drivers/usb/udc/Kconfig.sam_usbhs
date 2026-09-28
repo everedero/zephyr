@@ -11,7 +11,9 @@ config UDC_SAM_USBHS
 	select EVENTS
 	select UDC_DRIVER_HAS_HIGH_SPEED_SUPPORT if $(DT_SAM_HAS_HIGH_SPEED)
 	help
-	  SAM E70/S70/V70/V71 family USBHS device controller driver.
+	  SAM3X/3A family UOTGHS and SAM E70/S70/V70/V71 family USBHS device
+	  controller driver. Both are the same controller with a different
+	  register name prefix.
 
 	  The driver support High-Speed (480 Mbps) and Full-Speed (12 Mbps)
 	  operation.

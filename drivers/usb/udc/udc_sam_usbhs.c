@@ -31,6 +31,14 @@ LOG_MODULE_REGISTER(udc_sam_usbhs, CONFIG_UDC_DRIVER_LOG_LEVEL);
 #define USB_FIFO_EP_OFFSET	0x8000U
 
 /*
+ * The SAM3X UOTGHS is the same controller with a different macro prefix.
+ * Map its register names onto the USBHS names used below.
+ */
+#if defined(CONFIG_SOC_SERIES_SAM3X)
+#include "udc_sam_uotghs_compat.h"
+#endif
+
+/*
  * The new Atmel DFP headers provide mode-specific interrupt register field
  * definitions. Map the existing generic definitions to these.
  */
@@ -51,6 +59,17 @@ LOG_MODULE_REGISTER(udc_sam_usbhs, CONFIG_UDC_DRIVER_LOG_LEVEL);
 #endif
 #ifndef USBHS_DEVEPTIDR_CTRL_STALLRQC
 #define USBHS_DEVEPTIDR_CTRL_STALLRQC	USBHS_DEVEPTIDR_STALLRQC
+#endif
+
+/*
+ * Extra USBHS_CTRL bits required by the SoC. SAM3X must power the OTG pad,
+ * otherwise clearing USBHS_DEVCTRL_DETACH does not pull up D+. The bit does
+ * not exist on E70/S70/V70/V71.
+ */
+#if defined(CONFIG_SOC_SERIES_SAM3X)
+#define SAM_USBHS_CTRL_PAD	UOTGHS_CTRL_OTGPADE
+#else
+#define SAM_USBHS_CTRL_PAD	0U
 #endif
 
 /*
@@ -358,7 +377,7 @@ static void sam_usbhs_enable_clock(void)
 		 * UPLLCK/10.
 		 */
 		PMC->PMC_USB = PMC_USB_USBDIV(9) | PMC_USB_USBS;
-		PMC->PMC_SCER |= PMC_SCER_USBCLK;
+		PMC->PMC_SCER = PMC_SCER_USBCLK;
 
 		LOG_DBG("USB 48MHz clock enabled for Full-Speed mode");
 	}
@@ -367,8 +386,8 @@ static void sam_usbhs_enable_clock(void)
 static void sam_usbhs_disable_clock(void)
 {
 	if (!SAM_USBHS_HS_ENABLED) {
-		/* Disable USB_48M clock */
-		PMC->PMC_SCER &= ~PMC_SCER_USBCLK;
+		/* Disable USB_48M clock. PMC_SCER is write-only, use PMC_SCDR */
+		PMC->PMC_SCDR = PMC_SCDR_USBCLK;
 	}
 
 	PMC->CKGR_UCKR &= ~CKGR_UCKR_UPLLEN;
@@ -1462,18 +1481,29 @@ static int udc_sam_usbhs_enable(const struct device *dev)
 		return ret;
 	}
 
-	base->USBHS_CTRL = USBHS_CTRL_UIMOD | USBHS_CTRL_USBE | USBHS_CTRL_FRZCLK;
+	/*
+	 * Written as a whole word: on SAM3X the UOTGID pin enable is set after
+	 * reset and must stay clear for USBHS_CTRL_UIMOD to select device mode.
+	 */
+	base->USBHS_CTRL = USBHS_CTRL_UIMOD | USBHS_CTRL_USBE |
+			   USBHS_CTRL_FRZCLK | SAM_USBHS_CTRL_PAD;
 	barrier_dsync_fence_full();
 
 	if (SAM_USBHS_HS_ENABLED) {
 		base->USBHS_DEVCTRL = USBHS_DEVCTRL_DETACH | USBHS_DEVCTRL_SPDCONF_NORMAL;
 	} else {
-		base->USBHS_DEVCTRL = USBHS_DEVCTRL_DETACH | USBHS_DEVCTRL_SPDCONF_LOW_POWER;
+		/*
+		 * FORCED_FS, not LOW_POWER: in low-power mode the controller
+		 * signals the bus reset but decodes no packet, so no SETUP is
+		 * ever received and the host gives up.
+		 */
+		base->USBHS_DEVCTRL = USBHS_DEVCTRL_DETACH | USBHS_DEVCTRL_SPDCONF_FORCED_FS;
 	}
 
 	sam_usbhs_enable_clock();
 
-	base->USBHS_CTRL = USBHS_CTRL_UIMOD | USBHS_CTRL_USBE;
+	base->USBHS_CTRL = USBHS_CTRL_UIMOD | USBHS_CTRL_USBE |
+			   SAM_USBHS_CTRL_PAD;
 
 	while (!(base->USBHS_SR & USBHS_SR_CLKUSABLE)) {
 		k_yield();
@@ -1528,7 +1558,8 @@ static int udc_sam_usbhs_disable(const struct device *dev)
 
 	sam_usbhs_disable_clock();
 
-	base->USBHS_CTRL = USBHS_CTRL_UIMOD | USBHS_CTRL_FRZCLK;
+	base->USBHS_CTRL = USBHS_CTRL_UIMOD | USBHS_CTRL_FRZCLK |
+			   SAM_USBHS_CTRL_PAD;
 
 	clock_control_off(SAM_DT_PMC_CONTROLLER,
 			  (clock_control_subsys_t)&config->clock_cfg);
