@@ -1,6 +1,9 @@
 sample:
   name: USB Video sample
 common:
+  # The default video buffer pool alone takes 48 KB, and a board where no
+  # format fits in a single buffer offers none at all.
+  min_ram: 128
   harness: console
   harness_config:
     type: one_line
