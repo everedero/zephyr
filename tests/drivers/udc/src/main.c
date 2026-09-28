@@ -25,7 +25,7 @@ LOG_MODULE_REGISTER(udc_test, LOG_LEVEL_INF);
 #define QUEUED_BUFFERS (CONFIG_UDC_BUF_COUNT - 4)
 
 K_MSGQ_DEFINE(test_msgq, sizeof(struct udc_event), QUEUED_BUFFERS, sizeof(uint32_t));
-static K_KERNEL_STACK_DEFINE(test_udc_stack, 512);
+static K_KERNEL_STACK_DEFINE(test_udc_stack, 2048);
 static struct k_thread test_udc_thread_data;
 static K_SEM_DEFINE(ep_queue_sem, 0, QUEUED_BUFFERS);
 static uint8_t last_used_ep;
