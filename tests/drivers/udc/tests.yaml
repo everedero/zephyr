@@ -11,6 +11,7 @@ tests:
       - nucleo_f413zh
       - mimxrt1050_evk/mimxrt1052/hyperflash
       - rpi_pico
+      - arduino_due
     platform_exclude:
       - nrf54h20dk/nrf54h20/cpuapp
   drivers.usb.udc.build_only:
