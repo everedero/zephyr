@@ -250,6 +250,9 @@ class BossacBinaryRunner(ZephyrBinaryRunner):
 
         return cmd_flash
 
+    def make_bossac_boot_cmd(self):
+        return [self.bossac, '-p', self.port, '-b']
+
     def get_darwin_serial_device_list(self):
         """
         Get a list of candidate serial ports on Darwin by querying the IOKit
@@ -317,4 +320,16 @@ class BossacBinaryRunner(ZephyrBinaryRunner):
 
         self.require(self.bossac)
         self.set_serial_config()
+
+        # bossac does not wait for the GPNVM boot mode write to finish before
+        # --reset asserts PERRST, which resets the EEFC and discards the write.
+        # The SoC then boots the SAM-BA ROM instead of the application, with no
+        # console output and no indication that anything went wrong. bossac
+        # only writes the bit when it differs from the current value, so commit
+        # it in its own invocation first and let the flash command find it
+        # already set. SoCs running an extended SAM-BA bootloader have no GPNVM
+        # boot mode bit, so they do not need this.
+        if not self.is_extended_samba_protocol():
+            self.check_call(self.make_bossac_boot_cmd())
+
         self.check_call(self.make_bossac_cmd())

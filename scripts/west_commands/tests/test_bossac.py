@@ -65,10 +65,15 @@ def mock_nested_code_partition_node(flash_base=TEST_FLASH_BASE_ADDRESS):
     return mock_edt_node(flash_base, ['zephyr,mapped-partition'],
                          outer_partition_nd)
 
+# The GPNVM boot mode bit is committed by its own invocation, so that the
+# --reset of the flash command cannot abort the write.
+EXPECTED_BOOT_COMMAND = ['bossac', '-p', TEST_BOSSAC_PORT, '-b']
+
 EXPECTED_COMMANDS = [
     ['stty', '-F', TEST_BOSSAC_PORT, 'raw', 'ispeed', '115200',
      'ospeed', '115200', 'cs8', '-cstopb', 'ignpar', 'eol', '255',
      'eof', '255'],
+    EXPECTED_BOOT_COMMAND,
     ['bossac', '-p', TEST_BOSSAC_PORT, '-R', '-w', '-v',
      '-b', RC_KERNEL_BIN],
 ]
@@ -77,6 +82,7 @@ EXPECTED_COMMANDS_WITH_SPEED = [
     ['stty', '-F', TEST_BOSSAC_PORT, 'raw', 'ispeed', TEST_BOSSAC_SPEED,
      'ospeed', TEST_BOSSAC_SPEED, 'cs8', '-cstopb', 'ignpar', 'eol', '255',
      'eof', '255'],
+    EXPECTED_BOOT_COMMAND,
     ['bossac', '-p', TEST_BOSSAC_PORT, '-R', '-w', '-v',
      '-b', RC_KERNEL_BIN],
 ]
@@ -85,6 +91,7 @@ EXPECTED_COMMANDS_WITH_ERASE = [
     ['stty', '-F', TEST_BOSSAC_PORT, 'raw', 'ispeed', '115200',
      'ospeed', '115200', 'cs8', '-cstopb', 'ignpar', 'eol', '255',
      'eof', '255'],
+    EXPECTED_BOOT_COMMAND,
     ['bossac', '-p', TEST_BOSSAC_PORT, '-R', '-w', '-v',
      '-b', RC_KERNEL_BIN, '-e'],
 ]
@@ -92,6 +99,7 @@ EXPECTED_COMMANDS_WITH_OFFSET = [
     ['stty', '-F', TEST_BOSSAC_PORT, 'raw', 'ispeed', '115200',
      'ospeed', '115200', 'cs8', '-cstopb', 'ignpar', 'eol', '255',
      'eof', '255'],
+    EXPECTED_BOOT_COMMAND,
     ['bossac', '-p', TEST_BOSSAC_PORT, '-R', '-w', '-v',
      '-b', RC_KERNEL_BIN, '-o', str(TEST_OFFSET)],
 ]
@@ -102,6 +110,7 @@ EXPECTED_COMMANDS_WITH_FLASH_ADDRESS = [
         'ospeed', '115200', 'cs8', '-cstopb', 'ignpar', 'eol', '255',
         'eof', '255'
     ],
+    EXPECTED_BOOT_COMMAND,
     [
         'bossac', '-p', TEST_BOSSAC_PORT, '-R', '-w', '-v',
         '-b', RC_KERNEL_BIN, '-o', str(TEST_FLASH_ADDRESS),
