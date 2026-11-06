@@ -1,0 +1,64 @@
+# Copyright (c) 2026 Eve Redero
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+  Microchip 93xx Microwire ("3-wire") serial EEPROM, x16 organization.
+
+  There are multiple vendors manufacturing serial EEPROMs compatible with the
+  programming model of the Microchip 93xx, provided the least specific
+  compatible entry is "microchip,93xx".
+
+  Examples of compatible EEPROM families:
+  - Microchip 93AAxx, 93LCxx, 93Cxx
+  - ST M93Cxx
+  - Atmel AT93Cxx
+  - onsemi (Catalyst) CAT93Cxx
+
+  Only the x16 organization is supported; the x8 organization uses a wider
+  address field and a one-byte data phase, which this driver does not implement.
+  Microchip and Atmel sell the organization as a part number suffix, "B" for x16
+  and "A" for x8. Other parts, including the ST M93Cxx, select it with an ORG
+  pin: leave that pin unconnected or tied to VCC for x16.
+
+  CS is active high on this family. The node needs "spi-cs-high", and its entry
+  in the controller's "cs-gpios" needs GPIO_ACTIVE_HIGH; the driver has a
+  BUILD_ASSERT on the former because getting it wrong is the most likely
+  devicetree mistake for this part.
+
+  "address-width" is not derivable from "size": on some parts the address field
+  carries a leading don't-care bit, making it one bit wider than the address
+  needs. Take both values from the data sheet:
+
+    Part      Size   address-width  Address field  READ clocks
+    93xx46B    128    6             A5..A0          25
+    93xx56B    256    8             X A6..A0        27
+    93xx66B    512    8             A7..A0          27
+    93xx76B   1024   10             X A8..A0        29
+    93xx86B   2048   10             A9..A0          29
+
+  Verified on a 93AA46B only. The other parts are untested.
+
+compatible: "microchip,93xx"
+
+include: ["eeprom-base.yaml", "spi-device.yaml"]
+
+properties:
+  size:
+    required: true
+    description: Total EEPROM size in bytes. Must be a power of two.
+
+  address-width:
+    type: int
+    required: true
+    description: |
+      Width in bits of the address field in an instruction, from the x16
+      instruction-set table of the data sheet. This is the number of address
+      clocks the part expects, including any leading don't-care bit, not the
+      number of bits needed to address "size".
+
+  timeout:
+    type: int
+    default: 10
+    description: |
+      Self-timed write cycle duration in milliseconds. The default is the 10 ms
+      tWC maximum of the 93AA46B (4 ms typical).

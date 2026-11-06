@@ -1,0 +1,11 @@
+# Copyright (c) 2026 Eve Redero
+# SPDX-License-Identifier: Apache-2.0
+
+config EEPROM_93XX
+	bool "Microchip 93xx Microwire EEPROM"
+	default y
+	depends on DT_HAS_MICROCHIP_93XX_ENABLED
+	select SPI
+	help
+	  Enable support for Microchip 93xx Microwire serial EEPROMs driven over
+	  SPI. Only the x16 organisation ("B" suffix) is supported.
